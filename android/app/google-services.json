@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "307812321329",
+    "project_id": "akys-d708a",
+    "storage_bucket": "akys-d708a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:307812321329:android:27f23ad3324d300d87ed10",
+        "android_client_info": {
+          "package_name": "com.adnanhasgul.akys"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDdBbIvSMhSbZaz1SfcblxX-f0dxgz_uOo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

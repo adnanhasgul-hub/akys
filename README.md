@@ -11,8 +11,9 @@ AKYS başlığını ve iki modül kartını gösterir; kartlar henüz işlem ba�
 - Desktop kullanımı = Web/PWA üzerinden Microsoft Edge.
 - Windows native build / `.exe` hedefi yoktur.
 - Yalnızca `android/` ve `web/` platformları oluşturulmuştur.
-- Firebase ileride ortak backend olacaktır. Planlanan proje: `akys-d708a`.
-  Bu başlangıçta Firebase SDK, bağlantı, Authentication veya Firestore yoktur.
+- Firebase ortak backend için `akys-d708a` projesine bağlanmıştır.
+  Yalnızca `firebase_core` ve uygulama başlangıcında Firebase initialization vardır.
+  Authentication UI, Firestore veri işlemleri ve Hosting deploy yoktur.
 - AKYS üst platformdur. `work_schedule` ve `operative_notes` bağımsız peer modules'dür.
   Ameliyat Notları, Çalışma Çizelgesi'nin altında değildir.
 - Modüller birbirini import etmez. `app` modülleri bir araya getirir; `core` ortak,
@@ -65,3 +66,30 @@ sunulmalıdır (yerel denemede localhost kullanılabilir). Edge'de siteyi açıp
 uygulama yükleme menüsünden kurulum yapılabilir. Gerçek Edge kurulumu ve yayın
 ortamı bu aşamada doğrulanmamıştır. Çevrimdışı kullanım garantisi yoktur;
 çevrimdışı veri/senkronizasyon gelecekte ayrıca tasarlanmalıdır.
+
+## Firebase yapılandırması
+
+Resmi FlutterFire CLI 1.4.1 ile yalnızca Android ve Web için yapılandırılmıştır.
+Android package: `com.adnanhasgul.akys`. Var olan AKYS Web uygulaması kullanılmıştır.
+Web plugin kayıt kodunun gerektirdiği `flutter_web_plugins` Flutter SDK bağımlılığı
+açıkça eklenmiştir.
+`lib/firebase_options.dart`, `android/app/google-services.json`, `firebase.json`
+ve Google Services Gradle plugin ayarları FlutterFire tarafından üretilmiştir.
+`firebase.json` yalnızca FlutterFire uygulama eşleştirmelerini içerir; Hosting
+ve Firestore deploy ayarı eklenmemiştir.
+
+`main.dart`, Flutter binding hazırlandıktan sonra
+`Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform)`
+çağrısını bekler ve shell'i başlatır. Modüller ve pure Dart core Firebase'e bağımlı değildir.
+
+Yeniden yapılandırma gerektiğinde proje erişimi olan Firebase CLI oturumuyla:
+
+```sh
+dart pub global activate flutterfire_cli
+flutterfire configure --project=akys-d708a --platforms=android,web --android-package-name=com.adnanhasgul.akys
+```
+
+Firebase client configuration dosyaları istemci uygulamasına aittir; servis hesabı
+anahtarı değildir. Service account/private key ve Firebase CLI oturum credential'ları
+repository'ye eklenmemelidir. Veri erişim yetkileri gelecekte backend security rules
+ile yönetilmelidir; bu entegrasyon rules veya veri değiştirmez.
