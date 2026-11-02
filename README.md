@@ -12,8 +12,8 @@ AKYS başlığını ve iki modül kartını gösterir; kartlar henüz işlem ba�
 - Windows native build / `.exe` hedefi yoktur.
 - Yalnızca `android/` ve `web/` platformları oluşturulmuştur.
 - Firebase ortak backend için `akys-d708a` projesine bağlanmıştır.
-  Yalnızca `firebase_core` ve uygulama başlangıcında Firebase initialization vardır.
-  Authentication UI, Firestore veri işlemleri ve Hosting deploy yoktur.
+  `firebase_core`, `firebase_auth` ve uygulama başlangıcında Firebase initialization vardır.
+  Admin giriş arayüzü vardır; Firestore veri işlemleri ve Hosting deploy yoktur.
 - AKYS üst platformdur. `work_schedule` ve `operative_notes` bağımsız peer modules'dür.
   Ameliyat Notları, Çalışma Çizelgesi'nin altında değildir.
 - Modüller birbirini import etmez. `app` modülleri bir araya getirir; `core` ortak,
@@ -93,3 +93,10 @@ Firebase client configuration dosyaları istemci uygulamasına aittir; servis he
 anahtarı değildir. Service account/private key ve Firebase CLI oturum credential'ları
 repository'ye eklenmemelidir. Veri erişim yetkileri gelecekte backend security rules
 ile yönetilmelidir; bu entegrasyon rules veya veri değiştirmez.
+
+## Admin girişi
+
+Email/Password girişi ve signed `admin: true` custom claim yetkilendirmesi için
+[admin kurulum ve güvenlik notları](docs/ADMIN_AUTH.md) belgesine bakın.
+Canlı Email/Password provider ve admin-only Firestore rules doğrulanmıştır.
+Gerçek admin hesabı ve trusted Admin SDK ile claim ataması henüz beklemektedir.

@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../core/auth/auth_service.dart';
+import '../core/auth/auth_gate.dart';
+
 import '../modules/operative_notes/operative_notes_module.dart';
 import '../modules/work_schedule/work_schedule_module.dart';
 
 class AkysApp extends StatelessWidget {
-  const AkysApp({super.key});
+  const AkysApp({required this.auth, super.key});
+
+  final AuthService auth;
 
   @override
   Widget build(BuildContext context) {
@@ -15,18 +20,27 @@ class AkysApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF176B65)),
         scaffoldBackgroundColor: const Color(0xFFF7F9F8),
       ),
-      home: const _HomePage(),
+      // No route is public today, including unknown and future /share paths.
+      onGenerateRoute: (settings) => MaterialPageRoute<void>(
+        settings: settings,
+        builder: (_) => AuthGate(
+          auth: auth,
+          child: _HomePage(auth: auth),
+        ),
+      ),
     );
   }
 }
 
 class _HomePage extends StatelessWidget {
-  const _HomePage();
+  const _HomePage({required this.auth});
+  final AuthService auth;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     return Scaffold(
+      appBar: AppBar(actions: [LogoutButton(auth: auth)]),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
