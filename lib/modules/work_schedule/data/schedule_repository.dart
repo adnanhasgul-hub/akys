@@ -63,12 +63,14 @@ Map<String, dynamic> publicProjection(ScheduleMonth m) => {
     for (var d = 1; d <= m.days; d++)
       '$d': [
         for (final t in dailyTasks(m, d))
-          {
-            'task': t.task.name,
-            'personId': t.personId,
-            'manual': t.manual,
-            'warnings': t.warnings,
-          },
+          if (t.active)
+            {
+              'task': t.task.name,
+              if (t.halfDay) 'halfDay': true,
+              'personId': t.personId,
+              'manual': t.manual,
+              'warnings': t.warnings,
+            },
       ],
   },
   'revoked': false,
@@ -259,6 +261,25 @@ class FirestoreScheduleRepository implements ScheduleRepository {
           throw const ScheduleConflict(
             'Bu ay başka bir oturumda değişti. Kaydetmeden yeniden yükleyin.',
           );
+        }
+        if (prior.taskWorkdaySchemaVersion != next.taskWorkdaySchemaVersion ||
+            canonical(
+                  prior.taskHolidayCalendarSnapshot
+                      .map((h) => h.toJson())
+                      .toList(),
+                ) !=
+                canonical(
+                  next.taskHolidayCalendarSnapshot
+                      .map((h) => h.toJson())
+                      .toList(),
+                )) {
+          if (!prior.editable ||
+              prior.taskWorkdaySchemaVersion != 0 ||
+              next.taskWorkdaySchemaVersion != 1) {
+            throw const ScheduleConflict(
+              'Görev iş günü snapshot’ı yalnız eski taslakta etkinleştirilebilir.',
+            );
+          }
         }
         final beforeDifficulty = {
           for (final key in [

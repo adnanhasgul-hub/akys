@@ -197,6 +197,8 @@ class ScheduleController extends ChangeNotifier {
     final next = ScheduleMonth(
       year: year,
       month: month,
+      taskWorkdaySchemaVersion: 1,
+      taskHolidayCalendarSnapshot: snapshot.calendar,
       difficultySchemaVersion: 1,
       engineVersion: '1.2.0',
       difficultySettingsSnapshot: snapshot.settings,
@@ -244,6 +246,28 @@ class ScheduleController extends ChangeNotifier {
   Future<bool> save(ScheduleMonth next, {String? success}) => run(() async {
     _accept(await repository.saveMonth(next));
   }, success: success ?? 'Değişiklikler kaydedildi.');
+  Future<bool> applyTaskWorkdays() => run(() async {
+    final current = month!;
+    if (!current.editable || current.taskWorkdaySchemaVersion > 0) {
+      throw const ScheduleConflict(
+        'Yalnız eski taslak aylar açık onayla güncellenebilir.',
+      );
+    }
+    final calendar = current.difficultySchemaVersion > 0
+        ? current.holidayCalendarSnapshot
+        : TurkeyHolidayCalendar.month(
+            current.year,
+            current.month,
+            custom: (await repository.loadDifficultySettings()).customHolidays,
+          );
+    final json = current.toJson();
+    json['taskWorkdaySchemaVersion'] = 1;
+    json['taskHolidayCalendarSnapshot'] = calendar
+        .map((h) => h.toJson())
+        .toList();
+    _accept(await repository.saveMonth(ScheduleMonth.fromJson(json)));
+  });
+
   Future<bool> refreshMonthGroups() => run(
     () async {
       _accept(await repository.refreshMonthDutyGroups(month!));

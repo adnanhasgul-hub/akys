@@ -108,9 +108,11 @@ Uint8List exportExcel(ScheduleMonth m) {
       dayNames[m.date(d).weekday - 1],
       names(m.duties[d] ?? []),
       for (final t in dailyTasks(m, d))
-        t.personId == null
+        !t.active
+            ? t.workPeriodLabel
+            : t.personId == null
             ? 'Görev karşılanamıyor'
-            : '${m.person(t.personId!).displayName}${t.manual ? ' (Manuel)' : ''}${t.warnings.isNotEmpty ? ' ⚠' : ''}',
+            : '${m.person(t.personId!).displayName}${t.halfDay ? ' (13.00 öncesi)' : ''}${t.manual ? ' (Manuel)' : ''}${t.warnings.isNotEmpty ? ' ⚠' : ''}',
       '${m.difficultyScore(d)}',
       m.difficulty.holiday(m.date(d))?.name ??
           (m.difficulty.isPreHoliday(m.date(d)) ? 'Tatil öncesi' : ''),
@@ -214,7 +216,9 @@ Uint8List exportIcs(Map<String, dynamic> projection, String personId) {
     }
     for (final t in (projection['dailyTasks'] as Map)['$d'] as List? ?? []) {
       if ((t as Map)['personId'] == personId) {
-        labels.add(taskLabel(ClinicTask.values.byName(t['task'] as String)));
+        labels.add(
+          '${taskLabel(ClinicTask.values.byName(t['task'] as String))}${t['halfDay'] == true ? ' (13.00 öncesi)' : ''}',
+        );
       }
     }
     for (final label in labels) {
@@ -222,7 +226,7 @@ Uint8List exportIcs(Map<String, dynamic> projection, String personId) {
       String stamp(DateTime v) => dateKey(v).replaceAll('-', '');
       lines.addAll([
         'BEGIN:VEVENT',
-        'UID:${projection['monthId']}-$d-${ClinicTask.values.indexWhere((t) => taskLabel(t) == label)}-$personId@akys',
+        'UID:${projection['monthId']}-$d-${ClinicTask.values.indexWhere((t) => label.startsWith(taskLabel(t)))}-$personId@akys',
         'DTSTAMP:${stamp(DateTime.utc(year, month, 1))}T000000Z',
         'DTSTART;VALUE=DATE:${stamp(date)}',
         'DTEND;VALUE=DATE:${stamp(date.add(const Duration(days: 1)))}',

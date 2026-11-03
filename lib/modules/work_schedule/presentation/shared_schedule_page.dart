@@ -189,7 +189,7 @@ class _SharedSchedulePageState extends State<SharedSchedulePage> {
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
-                    '${taskLabel(ClinicTask.values.byName(t['task'] as String))}: ${name(t['personId'] as String?)}${t['manual'] == true ? ' (Manuel)' : ''}${(t['warnings'] as List).isNotEmpty ? ' ⚠' : ''}',
+                    '${taskLabel(ClinicTask.values.byName(t['task'] as String))}: ${name(t['personId'] as String?)}${t['halfDay'] == true ? ' (13.00 öncesi)' : ''}${t['manual'] == true ? ' (Manuel)' : ''}${(t['warnings'] as List).isNotEmpty ? ' ⚠' : ''}',
                   ),
                 ),
             ],

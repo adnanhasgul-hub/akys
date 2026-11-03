@@ -259,6 +259,8 @@ class ScheduleMonth {
     this.status = MonthStatus.draft,
     this.revision = 0,
     this.schemaVersion = 3,
+    this.taskWorkdaySchemaVersion = 0,
+    List<HolidayDay>? taskHolidayCalendarSnapshot,
     this.difficultySchemaVersion = 0,
     this.difficultySettingsSnapshot,
     List<HolidayDay>? holidayCalendarSnapshot,
@@ -289,6 +291,9 @@ class ScheduleMonth {
        overrides = overrides ?? {},
        shareTokens = shareTokens ?? [],
        snapshotGroupUpdates = snapshotGroupUpdates ?? [],
+       taskHolidayCalendarSnapshot = List.unmodifiable(
+         taskHolidayCalendarSnapshot ?? <HolidayDay>[],
+       ),
        holidayCalendarSnapshot = List.unmodifiable(
          holidayCalendarSnapshot ?? <HolidayDay>[],
        ),
@@ -303,6 +308,8 @@ class ScheduleMonth {
   String? publishedAt;
   int revision, requiredDuties;
   int schemaVersion;
+  final int taskWorkdaySchemaVersion;
+  final List<HolidayDay> taskHolidayCalendarSnapshot;
   final int difficultySchemaVersion;
   final DifficultySettings? difficultySettingsSnapshot;
   final List<HolidayDay> holidayCalendarSnapshot;
@@ -363,6 +370,10 @@ class ScheduleMonth {
         'manuallyEdited': manuallyEdited.contains(k),
       }),
     ),
+    'taskWorkdaySchemaVersion': taskWorkdaySchemaVersion,
+    'taskHolidayCalendarSnapshot': taskHolidayCalendarSnapshot
+        .map((h) => h.toJson())
+        .toList(),
     'tasks': tasks.map((k, v) => MapEntry(k.name, v.toJson())),
     'overrides': overrides.map((k, v) => MapEntry(k, v.toJson())),
     'shareTokens': shareTokens,
@@ -382,6 +393,11 @@ class ScheduleMonth {
         : MonthStatus.values.byName(j['status'] as String),
     revision: j['revision'] as int,
     schemaVersion: j['schemaVersion'] as int? ?? 1,
+    taskWorkdaySchemaVersion: j['taskWorkdaySchemaVersion'] as int? ?? 0,
+    taskHolidayCalendarSnapshot: [
+      for (final h in j['taskHolidayCalendarSnapshot'] as List? ?? [])
+        HolidayDay.fromJson(Map<String, dynamic>.from(h as Map)),
+    ],
     difficultySchemaVersion: j['difficultySchemaVersion'] as int? ?? 0,
     difficultySettingsSnapshot: j['difficultySettingsSnapshot'] == null
         ? null

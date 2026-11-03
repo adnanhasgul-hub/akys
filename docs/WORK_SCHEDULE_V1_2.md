@@ -36,3 +36,11 @@ Kasım 2026 regresyon fixture'ı, V1.1 (`8a6d973`) algoritmasından türetilmiş
 ## Güvenlik ve doğrulama
 
 AuthGate/admin claim modeli ve Firestore rules değiştirilmez. Settings admin-only private path altındadır. Public projection'a puan yönetimi, takvim override'ları veya personel grubu eklenmez. Security suite artık gerçek SDK ile settings-read/month-create transaction'ını da çalıştırır; yalnız demo-akys emulator'üne bağlanır. Hosting/Rules workflow dosyaları korunur; Codex'ten production deploy veya credential üretimi yapılmaz.
+
+## Görev dağılımında resmî iş günü kuralı
+
+Yeni aylar `taskWorkdaySchemaVersion=1` ve ayrı `taskHolidayCalendarSnapshot` taşır. Kaynak aynı TBB takvimidir; puan snapshot'ından ve nöbet motorundan bağımsızdır. Pazartesi–Cuma görevler aktiftir. Hafta sonu ve tam tatilde beş görev pasiftir; asıl/yedek/manuel atama ve çakışma değerlendirmesi yapılmaz. Yarım tatil hafta içine gelirse görevler yalnız 13.00 öncesini kapsar; hafta sonu öncelikle pasiftir.
+
+Eski belgeler sürüm 0 ile eski davranışını aynen korur. Görev Dağılımı ekranındaki “Görevleri Resmî İş Günlerine Göre Yeniden Hesapla” yalnız eski taslaklarda, açık onay ve mevcut revision kontrolüyle sürüm 1'e geçer. Var olan V1.2 ayının kendi tatil snapshot'ı kullanılır; daha eski aylar doğrulanmış yerel takvim ve mevcut özel günlerle snapshot alır. Desteklenmeyen yıl işlemi durdurur. Kesin/yayımlanmış aylar otomatik değiştirilmez; snapshot sonradan sıradan kaydetmeyle değiştirilemez. Asıl/yedek tanımları ve eski manuel kayıtlar silinmez; pasif günlerde uygulanmaz.
+
+Günlük masaüstü/mobil görünüm ve Excel pasif günleri “Görev yok” olarak, yarım günleri “13.00 öncesi” olarak gösterir. Yeni paylaşımlarda pasif görevler projection'a eklenmez; yalnız yarım gün görevlerine yönetim verisi içermeyen `halfDay` göstergesi eklenir. Mevcut paylaşımlar kendiliğinden yeniden yayımlanmaz. ICS yarım gün görevlerini açıklamasında 13.00 öncesi olarak etiketler; mevcut tüm-gün hatırlatıcı biçimi korunur. Nöbet atamaları, zorluk puanları ve nöbet istatistikleri değişmez.

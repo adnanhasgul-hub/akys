@@ -4,17 +4,27 @@ class DailyTask {
   const DailyTask(
     this.task,
     this.personId, {
+    this.active = true,
+    this.halfDay = false,
     this.manual = false,
     this.backup = false,
     this.warnings = const [],
   });
   final ClinicTask task;
   final String? personId;
+  final bool active, halfDay;
   final bool manual, backup;
+  String get workPeriodLabel => !active
+      ? 'Görev yok (resmî iş günü değil)'
+      : halfDay
+      ? '13.00 öncesi'
+      : 'Tam iş günü';
   final List<String> warnings;
   DailyTask warning(String text) => DailyTask(
     task,
     personId,
+    active: active,
+    halfDay: halfDay,
     manual: manual,
     backup: backup,
     warnings: [...warnings, text],
@@ -28,6 +38,22 @@ bool postDuty(ScheduleMonth m, String id, int day) => day == 1
     : (m.duties[day - 1] ?? []).contains(id);
 List<DailyTask> dailyTasks(ScheduleMonth m, int day) {
   final result = <DailyTask>[];
+  var halfDay = false;
+  if (m.taskWorkdaySchemaVersion > 0) {
+    final date = m.date(day);
+    final holidays = m.taskHolidayCalendarSnapshot.where(
+      (h) => h.date == dateKey(date),
+    );
+    final inactive =
+        date.weekday >= DateTime.saturday || holidays.any((h) => !h.isHalfDay);
+    if (inactive) {
+      return [
+        for (final task in ClinicTask.values)
+          DailyTask(task, null, active: false),
+      ];
+    }
+    halfDay = holidays.any((h) => h.isHalfDay);
+  }
   for (final task in ClinicTask.values) {
     final override = m.overrides['${dateKey(m.date(day))}|${task.name}'];
     if (override != null) {
@@ -36,6 +62,7 @@ List<DailyTask> dailyTasks(ScheduleMonth m, int day) {
         DailyTask(
           task,
           exists ? override.personId : null,
+          halfDay: halfDay,
           manual: true,
           warnings: [
             if (!exists) 'Geçersiz personel.',
@@ -48,7 +75,14 @@ List<DailyTask> dailyTasks(ScheduleMonth m, int day) {
     }
     final assignment = m.tasks[task];
     if (assignment == null) {
-      result.add(DailyTask(task, null, warnings: ['Asıl / yedek seçilmedi.']));
+      result.add(
+        DailyTask(
+          task,
+          null,
+          halfDay: halfDay,
+          warnings: ['Asıl / yedek seçilmedi.'],
+        ),
+      );
       continue;
     }
     final ids = m.people.map((p) => p.personId).toSet();
@@ -66,6 +100,7 @@ List<DailyTask> dailyTasks(ScheduleMonth m, int day) {
       DailyTask(
         task,
         person,
+        halfDay: halfDay,
         backup: backup,
         warnings: [
           if (person == null)

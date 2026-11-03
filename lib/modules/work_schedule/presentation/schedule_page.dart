@@ -1306,6 +1306,28 @@ class _SchedulePageState extends State<SchedulePage> {
           'Aylık asıl ve yedekleri seçin. Asıl nöbet ertesi ise yedek görevi devralır. İkisi de uygun değilse görev karşılanamaz; otomatik üçüncü kişi atanmaz.',
         ),
         const SizedBox(height: 16),
+        if (m.taskWorkdaySchemaVersion == 0) ...[
+          const Text('Eski ay: mevcut görev davranışı korunuyor.'),
+          if (m.editable)
+            OutlinedButton(
+              onPressed: c.busy
+                  ? null
+                  : () async {
+                      if (await confirm(
+                        'Resmî iş günü kuralını uygula',
+                        'Bu taslak ayın hafta sonu ve tam tatil görevleri pasif, yarım tatil görevleri 13.00 öncesi olacaktır. Nöbetler ve puanlar değişmez. Devam edilsin mi?',
+                      )) {
+                        await c.applyTaskWorkdays();
+                      }
+                    },
+              child: const Text(
+                'Görevleri Resmî İş Günlerine Göre Yeniden Hesapla',
+              ),
+            ),
+        ] else
+          const Text(
+            'Görevler yalnız resmî iş günlerinde; yarım tatillerde 13.00 öncesinde geçerlidir.',
+          ),
         for (final task in ClinicTask.values)
           Card(
             child: Padding(
@@ -1445,20 +1467,22 @@ class _SchedulePageState extends State<SchedulePage> {
 
   Widget _combinedRows(ScheduleMonth m) => LayoutBuilder(
     builder: (context, constraints) {
-      Widget taskCell(int day, DailyTask task) => InkWell(
-        onTap: m.editable && !c.busy
-            ? () => _override(m, day, task.task)
-            : null,
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Text(
-            '${task.personId == null ? 'Görev karşılanamıyor' : m.person(task.personId!).displayName}${task.backup ? ' (Yedek)' : ''}${task.manual ? ' (Manuel)' : ''}${task.warnings.isEmpty ? '' : '\n⚠ ${task.warnings.join(' ')}'}',
-            style: TextStyle(
-              color: task.warnings.isEmpty ? null : AkysColors.forbidden,
-            ),
-          ),
-        ),
-      );
+      Widget taskCell(int day, DailyTask task) => !task.active
+          ? Text(task.workPeriodLabel)
+          : InkWell(
+              onTap: m.editable && !c.busy
+                  ? () => _override(m, day, task.task)
+                  : null,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Text(
+                  '${task.personId == null ? 'Görev karşılanamıyor' : m.person(task.personId!).displayName}${task.backup ? ' (Yedek)' : ''}${task.manual ? ' (Manuel)' : ''}${task.halfDay ? ' (13.00 öncesi)' : ''}${task.warnings.isEmpty ? '' : '\n⚠ ${task.warnings.join(' ')}'}',
+                  style: TextStyle(
+                    color: task.warnings.isEmpty ? null : AkysColors.forbidden,
+                  ),
+                ),
+              ),
+            );
       if (constraints.maxWidth >= 900) {
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
