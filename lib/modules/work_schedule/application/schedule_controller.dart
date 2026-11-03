@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 
 import '../data/schedule_repository.dart';
 import '../domain/models.dart';
+import '../domain/difficulty.dart';
+import '../data/calendar/turkey_holidays.dart';
 import '../engine/duty_engine.dart';
 
 Map<String, dynamic> generateInBackground(Map<String, dynamic> json) {
@@ -14,6 +16,7 @@ Map<String, dynamic> generateInBackground(Map<String, dynamic> json) {
 class ScheduleController extends ChangeNotifier {
   ScheduleController(this.repository);
   final ScheduleRepository repository;
+  DifficultySettings difficultySettings = DifficultySettings.defaults();
   List<Personnel> personnel = [];
   List<ScheduleMonth> months = [];
   String? selectedId, error, notice;
@@ -58,6 +61,7 @@ class ScheduleController extends ChangeNotifier {
     await _monthsSub?.cancel();
     await run(() async {
       await repository.initialize();
+      difficultySettings = await repository.loadDifficultySettings();
       _peopleSub = repository.watchPersonnel().listen(
         (list) {
           personnel = list;
@@ -113,15 +117,91 @@ class ScheduleController extends ChangeNotifier {
     ]);
   }
 
-  Future<bool> createMonth(int year, int month, int total) => run(() async {
+  Future<bool> saveDifficulty(DifficultySettings next) => run(() async {
+    difficultySettings = await repository.saveDifficultySettings(
+      difficultySettings,
+      next,
+    );
+  }, success: 'Puanlama ayarları kaydedildi. Geçmiş aylar değişmedi.');
+  Future<DifficultySnapshot?> prepareDifficulty(int year, int month) async {
+    DifficultySnapshot? snapshot;
+    await run(() async {
+      difficultySettings = await repository.loadDifficultySettings();
+      List<HolidayDay> calendar;
+      try {
+        calendar = TurkeyHolidayCalendar.month(
+          year,
+          month,
+          custom: difficultySettings.customHolidays,
+        );
+      } on StateError catch (e) {
+        throw ScheduleConflict(e.message.toString());
+      }
+      snapshot = DifficultySnapshot(
+        settings: DifficultySettings(
+          weekdayScores: difficultySettings.weekdayScores,
+          preHolidayDifficultyScore:
+              difficultySettings.preHolidayDifficultyScore,
+          revision: difficultySettings.revision,
+        ),
+        calendar: calendar,
+        overrides: {},
+      );
+    });
+    return snapshot;
+  }
+
+  Future<bool> createMonth(
+    int year,
+    int month,
+    int total, {
+    DifficultySnapshot? difficulty,
+  }) => run(() async {
     final now = DateTime.now().toUtc().toIso8601String();
     final active = personnel.where((p) => p.active).toList();
     if (active.isEmpty) {
       throw const ScheduleConflict('Önce aktif personel ekleyin.');
     }
+    final days = DateTime.utc(year, month + 1, 0).day;
+    if (total < days || total > days * 3 || total > active.length * 8) {
+      throw const ScheduleConflict(
+        'Aylık toplam slot sayısı aktif personel kapasitesiyle uyumsuz. Ayı yeniden seçin.',
+      );
+    }
+    final live = difficulty == null
+        ? await repository.loadDifficultySettings()
+        : null;
+    DifficultySnapshot snapshot;
+    try {
+      snapshot =
+          difficulty ??
+          DifficultySnapshot(
+            settings: DifficultySettings(
+              weekdayScores: live!.weekdayScores,
+              preHolidayDifficultyScore: live.preHolidayDifficultyScore,
+              revision: live.revision,
+            ),
+            calendar: TurkeyHolidayCalendar.month(
+              year,
+              month,
+              custom: live.customHolidays,
+            ),
+            overrides: {},
+          );
+      snapshot.validateMonth(year, month);
+    } on ArgumentError catch (e) {
+      throw ScheduleConflict(e.message.toString());
+    } on StateError catch (e) {
+      throw ScheduleConflict(e.message.toString());
+    }
     final next = ScheduleMonth(
       year: year,
       month: month,
+      difficultySchemaVersion: 1,
+      engineVersion: '1.2.0',
+      difficultySettingsSnapshot: snapshot.settings,
+      holidayCalendarSnapshot: snapshot.calendar,
+      holidayDifficultyOverrides: snapshot.overrides,
       people: [
         for (final p in active)
           PersonSnapshot(

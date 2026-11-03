@@ -1,0 +1,384 @@
+{
+  "schemaVersion": 2,
+  "difficultySchemaVersion": 1,
+  "difficultySettingsSnapshot": {
+    "weekdayScores": [
+      3,
+      3,
+      3,
+      1,
+      6,
+      9,
+      5
+    ],
+    "preHolidayDifficultyScore": 6,
+    "revision": 0,
+    "schemaVersion": 1,
+    "customHolidays": []
+  },
+  "holidayCalendarSnapshot": [],
+  "holidayDifficultyOverrides": {},
+  "engineVersion": "1.1.0",
+  "snapshotGroupUpdates": [],
+  "year": 2026,
+  "month": 11,
+  "status": "draft",
+  "revision": 0,
+  "createdAt": "2026-11-01T00:00:00Z",
+  "updatedAt": "2026-11-01T00:00:00Z",
+  "publishedAt": null,
+  "requiredDuties": 54,
+  "personnelSnapshot": [
+    {
+      "personId": "p1",
+      "displayName": "Diagnostic 1",
+      "seniorityRank": 1,
+      "activeAtCreation": true,
+      "dutySeniorityGroup": "senior"
+    },
+    {
+      "personId": "p2",
+      "displayName": "Diagnostic 2",
+      "seniorityRank": 2,
+      "activeAtCreation": true,
+      "dutySeniorityGroup": "senior"
+    },
+    {
+      "personId": "p3",
+      "displayName": "Diagnostic 3",
+      "seniorityRank": 3,
+      "activeAtCreation": true,
+      "dutySeniorityGroup": "senior"
+    },
+    {
+      "personId": "p4",
+      "displayName": "Diagnostic 4",
+      "seniorityRank": 4,
+      "activeAtCreation": true,
+      "dutySeniorityGroup": "senior"
+    },
+    {
+      "personId": "p5",
+      "displayName": "Diagnostic 5",
+      "seniorityRank": 5,
+      "activeAtCreation": true,
+      "dutySeniorityGroup": "junior"
+    },
+    {
+      "personId": "p6",
+      "displayName": "Diagnostic 6",
+      "seniorityRank": 6,
+      "activeAtCreation": true,
+      "dutySeniorityGroup": "junior"
+    },
+    {
+      "personId": "p7",
+      "displayName": "Diagnostic 7",
+      "seniorityRank": 7,
+      "activeAtCreation": true,
+      "dutySeniorityGroup": "junior"
+    }
+  ],
+  "constraints": {
+    "p1": {
+      "cannot": [],
+      "must": []
+    },
+    "p2": {
+      "cannot": [],
+      "must": []
+    },
+    "p3": {
+      "cannot": [],
+      "must": []
+    },
+    "p4": {
+      "cannot": [],
+      "must": []
+    },
+    "p5": {
+      "cannot": [],
+      "must": []
+    },
+    "p6": {
+      "cannot": [],
+      "must": []
+    },
+    "p7": {
+      "cannot": [],
+      "must": []
+    }
+  },
+  "boundaryConditions": {},
+  "boundarySource": "manual",
+  "boundaryConfirmed": false,
+  "duties": {
+    "2": {
+      "date": "2026-11-02",
+      "personIds": [
+        "p1",
+        "p5"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "3": {
+      "date": "2026-11-03",
+      "personIds": [
+        "p2",
+        "p6"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "4": {
+      "date": "2026-11-04",
+      "personIds": [
+        "p3",
+        "p7"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "5": {
+      "date": "2026-11-05",
+      "personIds": [
+        "p5",
+        "p4"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "1": {
+      "date": "2026-11-01",
+      "personIds": [
+        "p3",
+        "p7"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "6": {
+      "date": "2026-11-06",
+      "personIds": [
+        "p1"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "7": {
+      "date": "2026-11-07",
+      "personIds": [
+        "p3",
+        "p6"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "8": {
+      "date": "2026-11-08",
+      "personIds": [
+        "p2",
+        "p5"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "9": {
+      "date": "2026-11-09",
+      "personIds": [
+        "p4"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "10": {
+      "date": "2026-11-10",
+      "personIds": [
+        "p1",
+        "p6"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "11": {
+      "date": "2026-11-11",
+      "personIds": [
+        "p3",
+        "p2"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "12": {
+      "date": "2026-11-12",
+      "personIds": [
+        "p7",
+        "p4"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "13": {
+      "date": "2026-11-13",
+      "personIds": [
+        "p5"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "14": {
+      "date": "2026-11-14",
+      "personIds": [
+        "p6",
+        "p3"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "15": {
+      "date": "2026-11-15",
+      "personIds": [
+        "p2",
+        "p7"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "16": {
+      "date": "2026-11-16",
+      "personIds": [
+        "p4"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "17": {
+      "date": "2026-11-17",
+      "personIds": [
+        "p3",
+        "p5"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "18": {
+      "date": "2026-11-18",
+      "personIds": [
+        "p1",
+        "p7"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "19": {
+      "date": "2026-11-19",
+      "personIds": [
+        "p4",
+        "p6"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "20": {
+      "date": "2026-11-20",
+      "personIds": [
+        "p2",
+        "p5"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "21": {
+      "date": "2026-11-21",
+      "personIds": [
+        "p3"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "22": {
+      "date": "2026-11-22",
+      "personIds": [
+        "p1",
+        "p7"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "23": {
+      "date": "2026-11-23",
+      "personIds": [
+        "p2",
+        "p6"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "24": {
+      "date": "2026-11-24",
+      "personIds": [
+        "p4"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "25": {
+      "date": "2026-11-25",
+      "personIds": [
+        "p7",
+        "p3"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "26": {
+      "date": "2026-11-26",
+      "personIds": [
+        "p5",
+        "p1"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "27": {
+      "date": "2026-11-27",
+      "personIds": [
+        "p4",
+        "p6"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "28": {
+      "date": "2026-11-28",
+      "personIds": [
+        "p2",
+        "p7"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "29": {
+      "date": "2026-11-29",
+      "personIds": [
+        "p5",
+        "p1"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    },
+    "30": {
+      "date": "2026-11-30",
+      "personIds": [
+        "p4",
+        "p6"
+      ],
+      "source": "generated",
+      "manuallyEdited": false
+    }
+  },
+  "tasks": {},
+  "overrides": {},
+  "shareTokens": []
+}

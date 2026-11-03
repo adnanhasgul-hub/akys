@@ -11,6 +11,8 @@ import '../application/schedule_controller.dart';
 import '../application/schedule_export.dart';
 import '../data/schedule_repository.dart';
 import '../domain/models.dart';
+import '../domain/difficulty.dart';
+import 'difficulty_widgets.dart';
 import '../engine/duty_engine.dart';
 import '../engine/task_engine.dart';
 
@@ -32,6 +34,7 @@ class _SchedulePageState extends State<SchedulePage> {
     'Personel',
     'Geçmiş Aylar',
     'Birleşik Görünüm',
+    'Ayarlar',
   ];
   static const icons = [
     Icons.dashboard_outlined,
@@ -40,6 +43,7 @@ class _SchedulePageState extends State<SchedulePage> {
     Icons.groups_outlined,
     Icons.history,
     Icons.table_chart_outlined,
+    Icons.settings_outlined,
   ];
   @override
   void initState() {
@@ -184,7 +188,13 @@ class _SchedulePageState extends State<SchedulePage> {
                     2 => _tasks(),
                     3 => _personnel(),
                     4 => _history(),
-                    _ => _combined(),
+                    5 => _combined(),
+                    _ => DifficultySettingsPanel(
+                      key: ValueKey(c.difficultySettings.revision),
+                      settings: c.difficultySettings,
+                      busy: c.busy,
+                      onSave: c.saveDifficulty,
+                    ),
                   },
           ),
         ],
@@ -511,7 +521,7 @@ class _SchedulePageState extends State<SchedulePage> {
     var year = now.year, month = now.month;
     final count = c.personnel.where((p) => p.active).length;
     final total = TextEditingController(
-      text: '${min(count * 8, DateTime.utc(year, month + 1, 0).day * 3)}',
+      text: '${min(count * 8, DateTime.utc(year, month + 1, 0).day * 2)}',
     );
     final form = GlobalKey<FormState>();
     final accepted = await showDialog<bool>(
@@ -588,8 +598,26 @@ class _SchedulePageState extends State<SchedulePage> {
         ),
       ),
     );
-    if (accepted == true &&
-        await c.createMonth(year, month, int.parse(total.text)) &&
+    if (accepted != true || !mounted) return;
+    final snapshot = await c.prepareDifficulty(year, month);
+    if (snapshot == null || !mounted) return;
+    final holidays = snapshot.calendar.where((h) {
+      final d = DateTime.parse(h.date);
+      return d.year == year && d.month == month;
+    }).toList();
+    final overrides = await chooseHolidayScores(context, holidays);
+    if (overrides == null || !mounted) return;
+    final difficulty = DifficultySnapshot(
+      settings: snapshot.settings,
+      calendar: snapshot.calendar,
+      overrides: overrides,
+    );
+    if (await c.createMonth(
+          year,
+          month,
+          int.parse(total.text),
+          difficulty: difficulty,
+        ) &&
         mounted) {
       setState(() => section = 1);
     }
@@ -626,6 +654,13 @@ class _SchedulePageState extends State<SchedulePage> {
       padding: const EdgeInsets.all(16),
       children: [
         _monthHeading(m),
+        if (m.difficultySchemaVersion == 0)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Text(
+              'Eski ay: puan/tatil snapshot’ı yok. Puanlar başlangıç haftalık değerlerinden türetilir; geçmiş takvim sessizce değiştirilmez.',
+            ),
+          ),
         if (m.editable)
           Wrap(
             spacing: 8,
@@ -1070,6 +1105,14 @@ class _SchedulePageState extends State<SchedulePage> {
                       '$d · ${dayNames[m.date(d).weekday - 1]}',
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
+                    Text(
+                      'Zorluk: ${m.difficultyScore(d)}${m.isHoliday(d)
+                          ? ' · ${m.difficulty.holiday(m.date(d))!.name}'
+                          : m.difficulty.isPreHoliday(m.date(d))
+                          ? ' · Tatil öncesi'
+                          : ''}',
+                      style: const TextStyle(fontSize: 11),
+                    ),
                     if (compositionWarning(m, d) != null)
                       Tooltip(
                         message: compositionWarning(m, d)!,
@@ -1215,6 +1258,8 @@ class _SchedulePageState extends State<SchedulePage> {
             'Tek',
             'Eşli',
             'Çömezli',
+            'Resmî Tatil',
+            'Zorluk Puanı',
             'Pzt/Sal/Çar',
             'Perşembe',
             'Cuma',
@@ -1233,6 +1278,14 @@ class _SchedulePageState extends State<SchedulePage> {
                 DataCell(Text('${stats[p.personId]!.solo}')),
                 DataCell(Text('${stats[p.personId]!.paired}')),
                 DataCell(Text('${stats[p.personId]!.withJunior}')),
+                DataCell(
+                  Text(
+                    m.difficultySchemaVersion == 0
+                        ? 'Bilinmiyor'
+                        : '${stats[p.personId]!.holidayDuties}',
+                  ),
+                ),
+                DataCell(Text('${stats[p.personId]!.totalDifficulty}')),
                 for (final n in stats[p.personId]!.categories)
                   DataCell(Text('$n')),
               ],

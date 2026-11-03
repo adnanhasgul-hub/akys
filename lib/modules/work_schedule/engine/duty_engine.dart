@@ -7,47 +7,67 @@ class DutyStatistics {
     this.solo = 0,
     this.paired = 0,
     this.withJunior = 0,
+    this.totalDifficulty = 0,
+    this.holidayDuties = 0,
   });
   final int total;
-  final int solo, paired, withJunior;
+  final int solo, paired, withJunior, totalDifficulty, holidayDuties;
   final List<int> categories;
 }
 
 int dayCategory(DateTime date) => date.weekday <= 3 ? 0 : date.weekday - 3;
-Map<String, DutyStatistics> statistics(ScheduleMonth m) => {
-  for (final p in m.people)
-    p.personId: DutyStatistics(
-      m.duties.values.where((ids) => ids.contains(p.personId)).length,
-      [
-        for (var c = 0; c < 5; c++)
-          m.duties.entries
-              .where(
-                (e) =>
-                    dayCategory(m.date(e.key)) == c &&
-                    e.value.contains(p.personId),
-              )
-              .length,
-      ],
-      solo: m.duties.values
-          .where((ids) => ids.length == 1 && ids.contains(p.personId))
-          .length,
-      paired: m.duties.values
-          .where((ids) => ids.length >= 2 && ids.contains(p.personId))
-          .length,
-      withJunior: m.duties.values
-          .where(
-            (ids) =>
-                ids.contains(p.personId) &&
-                ids.any(
-                  (id) =>
-                      id != p.personId &&
-                      m.person(id).dutySeniorityGroup ==
-                          DutySeniorityGroup.junior,
-                ),
-          )
-          .length,
-    ),
-};
+Map<String, DutyStatistics> statistics(ScheduleMonth m) {
+  final difficulty = m.difficulty;
+  final scores = {
+    for (var d = 1; d <= m.days; d++) d: difficulty.score(m.date(d)),
+  };
+  final holidays = {
+    for (var d = 1; d <= m.days; d++)
+      if (difficulty.holiday(m.date(d)) != null) d,
+  };
+  return {
+    for (final p in m.people)
+      p.personId: DutyStatistics(
+        m.duties.values.where((ids) => ids.contains(p.personId)).length,
+        [
+          for (var c = 0; c < 5; c++)
+            m.duties.entries
+                .where(
+                  (e) =>
+                      dayCategory(m.date(e.key)) == c &&
+                      e.value.contains(p.personId),
+                )
+                .length,
+        ],
+        totalDifficulty: m.duties.entries
+            .where((e) => e.value.contains(p.personId))
+            .fold<int>(0, (sum, e) => sum + scores[e.key]!),
+        holidayDuties: m.duties.entries
+            .where(
+              (e) => holidays.contains(e.key) && e.value.contains(p.personId),
+            )
+            .length,
+        solo: m.duties.values
+            .where((ids) => ids.length == 1 && ids.contains(p.personId))
+            .length,
+        paired: m.duties.values
+            .where((ids) => ids.length >= 2 && ids.contains(p.personId))
+            .length,
+        withJunior: m.duties.values
+            .where(
+              (ids) =>
+                  ids.contains(p.personId) &&
+                  ids.any(
+                    (id) =>
+                        id != p.personId &&
+                        m.person(id).dutySeniorityGroup ==
+                            DutySeniorityGroup.junior,
+                  ),
+            )
+            .length,
+      ),
+  };
+}
 
 /// Independent invariant checker, used by generation, manual edits and finalization.
 List<String> validateDuties(ScheduleMonth m, {bool complete = true}) {
@@ -167,6 +187,12 @@ enum DutyObjective {
   seniorCompanionPriority,
   totalFairness,
   totalSeniority,
+  saturdayExcess,
+  categoryExcess,
+  difficultyRange,
+  difficultyVariance,
+  holidayFairness,
+  saturdayFairness,
   categoryFairness,
   thuSun,
   thursdaySeniority,
@@ -256,12 +282,50 @@ List<int> objective(ScheduleMonth m) {
     }
     if (ranks.length == 3) third += ranks[1];
   }
+  int spread(Iterable<int> numbers) {
+    final list = numbers.toList()..sort();
+    return list.isEmpty ? 0 : list.last - list.first;
+  }
+
+  final weighted = m.difficultySchemaVersion > 0;
+  final saturdaySpread = spread(s.values.map((v) => v.categories[3]));
+  final saturdayExcess = weighted && saturdaySpread > 1
+      ? (saturdaySpread - 1) * (saturdaySpread - 1)
+      : 0;
+  var categoryExcess = 0;
+  if (weighted) {
+    for (var c = 0; c < 5; c++) {
+      final delta = spread(s.values.map((v) => v.categories[c]));
+      if (delta > 1) categoryExcess += (delta - 1) * (delta - 1);
+    }
+  }
   return [
     staffing,
     composition,
     seniorCompanionPriority,
     totals,
     seniority,
+    saturdayExcess,
+    categoryExcess,
+    weighted ? spread(s.values.map((v) => v.totalDifficulty)) : 0,
+    weighted
+        ? s.values.fold<int>(
+            0,
+            (sum, v) => sum + v.totalDifficulty * v.totalDifficulty,
+          )
+        : 0,
+    weighted
+        ? s.values.fold<int>(
+            0,
+            (sum, v) => sum + v.holidayDuties * v.holidayDuties,
+          )
+        : 0,
+    weighted
+        ? s.values.fold<int>(
+            0,
+            (sum, v) => sum + v.categories[3] * v.categories[3],
+          )
+        : 0,
     categories,
     thuSun,
     ...categoryPreference,
@@ -621,9 +685,22 @@ class DutyEngine {
     final errors = validateDuties(input);
     if (errors.isNotEmpty) return GenerationResult(errors: errors);
     final m = input.clone()
-      ..schemaVersion = 2
-      ..engineVersion = '1.1.0';
+      ..schemaVersion = input.difficultySchemaVersion > 0
+          ? 3
+          : input.schemaVersion
+      ..engineVersion = '1.2.0';
     _optimize(m);
+    if (input.difficultySchemaVersion > 0) {
+      final alternative = input.clone()
+        ..schemaVersion = 3
+        ..engineVersion = '1.2.0';
+      _optimize(alternative, reverse: true);
+      if (compareScore(objective(alternative), objective(m)) < 0) {
+        m.duties
+          ..clear()
+          ..addAll(alternative.duties.map((k, v) => MapEntry(k, [...v])));
+      }
+    }
     for (final ids in m.duties.values) {
       ids.sort(
         (a, b) =>
@@ -633,12 +710,17 @@ class DutyEngine {
     return GenerationResult(month: m);
   }
 
-  void _optimize(ScheduleMonth m) {
+  void _optimize(ScheduleMonth m, {bool reverse = false}) {
     var best = objective(m);
+    final order = List.generate(m.days, (i) => i + 1);
+    if (reverse) {
+      order.setAll(0, order.reversed.toList());
+    }
     for (var pass = 0; pass < optimizationPasses; pass++) {
       var changed = false;
-      for (var a = 1; a <= m.days; a++) {
-        for (var b = a + 1; b <= m.days; b++) {
+      for (var ai = 0; ai < order.length; ai++) {
+        for (var bi = ai + 1; bi < order.length; bi++) {
+          final a = order[ai], b = order[bi];
           // Reverse moves matter when fixed seniors cannot swap their dates.
           for (var direction = 0; direction < 2; direction++) {
             final from = direction == 0 ? a : b, to = direction == 0 ? b : a;

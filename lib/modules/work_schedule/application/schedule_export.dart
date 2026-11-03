@@ -6,6 +6,7 @@ import 'package:archive/archive.dart';
 import '../domain/models.dart';
 import '../data/schedule_repository.dart';
 import '../engine/task_engine.dart';
+import '../engine/duty_engine.dart';
 
 String _xml(String text) => text
     .replaceAll('&', '&amp;')
@@ -55,7 +56,15 @@ Uint8List exportExcel(ScheduleMonth m) {
   final duties = <List<String>>[
     ['${m.title} Ayı Asistan Doktor Nöbet Çizelgesi'],
     ['AKYS · A Klinik Yönetim Sistemi · ${statusLabel(m.status)}'],
-    ['Tarih', 'Gün', '1. Nöbetçi', '2. Nöbetçi', '3. Nöbetçi'],
+    [
+      'Tarih',
+      'Gün',
+      '1. Nöbetçi',
+      '2. Nöbetçi',
+      '3. Nöbetçi',
+      'Zorluk Puanı',
+      'Tatil / Özel Gün',
+    ],
   ];
   for (var d = 1; d <= m.days; d++) {
     final ids = m.duties[d] ?? [];
@@ -64,6 +73,10 @@ Uint8List exportExcel(ScheduleMonth m) {
       dayNames[m.date(d).weekday - 1],
       for (var i = 0; i < 3; i++)
         i < ids.length ? m.person(ids[i]).displayName : '',
+      '${m.difficultyScore(d)}',
+      m.difficulty.holiday(m.date(d)) == null
+          ? (m.difficulty.isPreHoliday(m.date(d)) ? 'Tatil öncesi' : '')
+          : '${m.difficulty.holiday(m.date(d))!.name} (${m.difficulty.holiday(m.date(d))!.isHalfDay ? 'Yarım gün' : 'Tam gün'})',
     ]);
   }
   duties.add([]);
@@ -80,7 +93,14 @@ Uint8List exportExcel(ScheduleMonth m) {
   final combined = <List<String>>[
     ['${m.title} Birleşik Çizelge'],
     ['Nöbet ertesi yedekler ve manuel görevler dahil'],
-    ['Tarih', 'Gün', 'Nöbetçiler', ...ClinicTask.values.map(taskLabel)],
+    [
+      'Tarih',
+      'Gün',
+      'Nöbetçiler',
+      ...ClinicTask.values.map(taskLabel),
+      'Zorluk Puanı',
+      'Tatil / Özel Gün',
+    ],
   ];
   for (var d = 1; d <= m.days; d++) {
     combined.add([
@@ -91,6 +111,30 @@ Uint8List exportExcel(ScheduleMonth m) {
         t.personId == null
             ? 'Görev karşılanamıyor'
             : '${m.person(t.personId!).displayName}${t.manual ? ' (Manuel)' : ''}${t.warnings.isNotEmpty ? ' ⚠' : ''}',
+      '${m.difficultyScore(d)}',
+      m.difficulty.holiday(m.date(d))?.name ??
+          (m.difficulty.isPreHoliday(m.date(d)) ? 'Tatil öncesi' : ''),
+    ]);
+  }
+  duties.add([]);
+  duties.add([
+    'Personel',
+    'Toplam',
+    'Tek',
+    'Eşli',
+    'Resmî Tatil',
+    'Zorluk Puanı',
+  ]);
+  final stats = statistics(m);
+  for (final p in m.people) {
+    final s = stats[p.personId]!;
+    duties.add([
+      p.displayName,
+      '${s.total}',
+      '${s.solo}',
+      '${s.paired}',
+      '${s.holidayDuties}',
+      '${s.totalDifficulty}',
     ]);
   }
   final archive = Archive();
@@ -109,7 +153,7 @@ Uint8List exportExcel(ScheduleMonth m) {
   );
   add(
     'xl/workbook.xml',
-    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Nöbet Çizelgesi" sheetId="1" r:id="rId1"/><sheet name="Birleşik Çizelge" sheetId="2" r:id="rId2"/></sheets><definedNames><definedName name="_xlnm.Print_Titles" localSheetId="0">\'Nöbet Çizelgesi\'!\$1:\$3</definedName><definedName name="_xlnm.Print_Area" localSheetId="0">\'Nöbet Çizelgesi\'!\$A\$1:\$E\$${duties.length}</definedName></definedNames></workbook>',
+    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Nöbet Çizelgesi" sheetId="1" r:id="rId1"/><sheet name="Birleşik Çizelge" sheetId="2" r:id="rId2"/></sheets><definedNames><definedName name="_xlnm.Print_Titles" localSheetId="0">\'Nöbet Çizelgesi\'!\$1:\$3</definedName><definedName name="_xlnm.Print_Area" localSheetId="0">\'Nöbet Çizelgesi\'!\$A\$1:\$G\$${duties.length}</definedName></definedNames></workbook>',
   );
   add(
     'xl/_rels/workbook.xml.rels',

@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'difficulty.dart';
+
 String dateKey(DateTime date) =>
     '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 DateTime calendarDate(String value) {
@@ -256,7 +258,11 @@ class ScheduleMonth {
     required this.updatedAt,
     this.status = MonthStatus.draft,
     this.revision = 0,
-    this.schemaVersion = 2,
+    this.schemaVersion = 3,
+    this.difficultySchemaVersion = 0,
+    this.difficultySettingsSnapshot,
+    List<HolidayDay>? holidayCalendarSnapshot,
+    Map<String, int>? holidayDifficultyOverrides,
     this.engineVersion = '1.1.0',
     List<Map<String, dynamic>>? snapshotGroupUpdates,
     int? requiredDuties,
@@ -282,7 +288,13 @@ class ScheduleMonth {
        tasks = tasks ?? {},
        overrides = overrides ?? {},
        shareTokens = shareTokens ?? [],
-       snapshotGroupUpdates = snapshotGroupUpdates ?? [];
+       snapshotGroupUpdates = snapshotGroupUpdates ?? [],
+       holidayCalendarSnapshot = List.unmodifiable(
+         holidayCalendarSnapshot ?? <HolidayDay>[],
+       ),
+       holidayDifficultyOverrides = Map.unmodifiable(
+         holidayDifficultyOverrides ?? <String, int>{},
+       );
   final int year, month;
   final List<PersonSnapshot> people;
   final String createdAt;
@@ -291,6 +303,17 @@ class ScheduleMonth {
   String? publishedAt;
   int revision, requiredDuties;
   int schemaVersion;
+  final int difficultySchemaVersion;
+  final DifficultySettings? difficultySettingsSnapshot;
+  final List<HolidayDay> holidayCalendarSnapshot;
+  final Map<String, int> holidayDifficultyOverrides;
+  DifficultySnapshot get difficulty => DifficultySnapshot(
+    settings: difficultySettingsSnapshot ?? DifficultySettings.defaults(),
+    calendar: holidayCalendarSnapshot,
+    overrides: holidayDifficultyOverrides,
+  );
+  int difficultyScore(int day) => difficulty.score(date(day));
+  bool isHoliday(int day) => difficulty.holiday(date(day)) != null;
   String engineVersion;
   final List<Map<String, dynamic>> snapshotGroupUpdates;
   MonthStatus status;
@@ -311,6 +334,12 @@ class ScheduleMonth {
       people.firstWhere((p) => p.personId == id);
   Map<String, dynamic> toJson() => {
     'schemaVersion': schemaVersion,
+    'difficultySchemaVersion': difficultySchemaVersion,
+    'difficultySettingsSnapshot': difficultySettingsSnapshot?.toJson(),
+    'holidayCalendarSnapshot': holidayCalendarSnapshot
+        .map((h) => h.toJson())
+        .toList(),
+    'holidayDifficultyOverrides': holidayDifficultyOverrides,
     'engineVersion': engineVersion,
     'snapshotGroupUpdates': snapshotGroupUpdates,
     'year': year,
@@ -353,6 +382,19 @@ class ScheduleMonth {
         : MonthStatus.values.byName(j['status'] as String),
     revision: j['revision'] as int,
     schemaVersion: j['schemaVersion'] as int? ?? 1,
+    difficultySchemaVersion: j['difficultySchemaVersion'] as int? ?? 0,
+    difficultySettingsSnapshot: j['difficultySettingsSnapshot'] == null
+        ? null
+        : DifficultySettings.fromJson(
+            Map<String, dynamic>.from(j['difficultySettingsSnapshot'] as Map),
+          ),
+    holidayCalendarSnapshot: [
+      for (final h in j['holidayCalendarSnapshot'] as List? ?? [])
+        HolidayDay.fromJson(Map<String, dynamic>.from(h as Map)),
+    ],
+    holidayDifficultyOverrides: Map<String, int>.from(
+      j['holidayDifficultyOverrides'] as Map? ?? {},
+    ),
     engineVersion: j['engineVersion'] as String? ?? '1.0.0',
     snapshotGroupUpdates: [
       for (final update in j['snapshotGroupUpdates'] as List? ?? [])

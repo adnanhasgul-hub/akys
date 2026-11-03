@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../domain/models.dart';
+import '../domain/difficulty.dart';
 import '../engine/duty_engine.dart';
 import '../engine/task_engine.dart';
 
@@ -20,6 +21,11 @@ String canonical(Object? value) {
 }
 
 abstract class ScheduleRepository {
+  Future<DifficultySettings> loadDifficultySettings();
+  Future<DifficultySettings> saveDifficultySettings(
+    DifficultySettings before,
+    DifficultySettings after,
+  );
   Future<void> initialize();
   Stream<List<Personnel>> watchPersonnel();
   Future<void> replacePersonnel(List<Personnel> before, List<Personnel> after);
@@ -79,6 +85,40 @@ class FirestoreScheduleRepository implements ScheduleRepository {
       root.collection('months');
   CollectionReference<Map<String, dynamic>> get shares =>
       db.collection('shared_schedules');
+  DocumentReference<Map<String, dynamic>> get difficultyRef =>
+      root.collection('settings').doc('difficulty');
+  @override
+  Future<DifficultySettings> loadDifficultySettings() async {
+    final doc = await difficultyRef.get(
+      const GetOptions(source: Source.server),
+    );
+    return doc.exists
+        ? DifficultySettings.fromJson(doc.data()!)
+        : DifficultySettings.defaults();
+  }
+
+  @override
+  Future<DifficultySettings> saveDifficultySettings(
+    DifficultySettings before,
+    DifficultySettings after,
+  ) async {
+    after.validate();
+    return db.runTransaction((tx) async {
+      final doc = await tx.get(difficultyRef);
+      final current = doc.exists
+          ? DifficultySettings.fromJson(doc.data()!)
+          : DifficultySettings.defaults();
+      if (canonical(current.toJson()) != canonical(before.toJson())) {
+        throw const ScheduleConflict(
+          'Puanlama ayarları başka bir oturumda değişti. Yeniden yükleyin.',
+        );
+      }
+      final next = after.withRevision(current.revision + 1);
+      tx.set(difficultyRef, next.toJson());
+      return next;
+    });
+  }
+
   @override
   Future<void> initialize() async {
     // Existing personnel are never replaced by seeding. The registry document is
@@ -196,6 +236,18 @@ class FirestoreScheduleRepository implements ScheduleRepository {
     return db.runTransaction((tx) async {
       final ref = months.doc(next.id);
       final old = await tx.get(ref);
+      if (create && next.difficultySchemaVersion > 0) {
+        final settingsDoc = await tx.get(difficultyRef);
+        final current = settingsDoc.exists
+            ? DifficultySettings.fromJson(settingsDoc.data()!)
+            : DifficultySettings.defaults();
+        if (current.revision != next.difficultySettingsSnapshot?.revision) {
+          throw const ScheduleConflict(
+            'Puanlama ayarları değişti. Tatil puanlarını yeniden doğrulayın.',
+          );
+        }
+        next.difficulty.validateMonth(next.year, next.month);
+      }
       if (create ? old.exists : !old.exists) {
         throw const ScheduleConflict(
           'Ay zaten var veya silinmiş. Yeniden yükleyin.',
@@ -206,6 +258,23 @@ class FirestoreScheduleRepository implements ScheduleRepository {
         if (prior.revision != month.revision) {
           throw const ScheduleConflict(
             'Bu ay başka bir oturumda değişti. Kaydetmeden yeniden yükleyin.',
+          );
+        }
+        final beforeDifficulty = {
+          for (final key in [
+            'difficultySchemaVersion',
+            'difficultySettingsSnapshot',
+            'holidayCalendarSnapshot',
+            'holidayDifficultyOverrides',
+          ])
+            key: prior.toJson()[key],
+        };
+        final afterDifficulty = {
+          for (final key in beforeDifficulty.keys) key: next.toJson()[key],
+        };
+        if (canonical(beforeDifficulty) != canonical(afterDifficulty)) {
+          throw const ScheduleConflict(
+            'Aylık puan snapshot’ı değiştirilemez. Yeni ay güncel ayarları kullanır.',
           );
         }
         if (canonical(prior.people.map((p) => p.toJson()).toList()) !=
@@ -301,7 +370,7 @@ class FirestoreScheduleRepository implements ScheduleRepository {
         'before': before,
         'after': after,
       });
-      next.schemaVersion = 2;
+      next.schemaVersion = next.difficultySchemaVersion > 0 ? 3 : 2;
       next.revision++;
       next.updatedAt = now;
       tx.set(months.doc(next.id), next.toJson());
