@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
-const { doc, getDoc, setDoc, deleteDoc, collection, getDocs, Timestamp } = require('firebase/firestore');
+const { doc, getDoc, setDoc, deleteDoc, collection, getDocs, Timestamp, query, where, limit, updateDoc } = require('firebase/firestore');
 
 (async () => {
   if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('Local emulator required');
@@ -37,10 +37,20 @@ const { doc, getDoc, setDoc, deleteDoc, collection, getDocs, Timestamp } = requi
         await assertFails(setDoc(doc(db,path), {probe:true}));
       }
     }
+    for (const path of ['work_schedule/main', 'work_schedule/main/personnel/p1', 'work_schedule/main/months/2026-11', 'work_schedule/main/months/2026-11/constraints/p1', 'work_schedule/main/months/2026-11/duties/1', 'work_schedule/main/months/2026-11/task_assignments/ward', 'work_schedule/main/months/2026-11/task_overrides/a']) {
+      await assertSucceeds(setDoc(doc(admin,path), {probe:true}));
+      await assertSucceeds(getDoc(doc(admin,path)));
+    }
+    for (const db of [anon,user]) {
+      await assertFails(getDocs(collection(db,'work_schedule/main/personnel')));
+      await assertFails(getDocs(collection(db,'work_schedule/main/months')));
+    }
     await assertSucceeds(setDoc(ref, projection));
     for (const db of [anon,user]) {
       await assertSucceeds(getDoc(doc(db, 'shared_schedules/' + token)));
       await assertFails(getDocs(collection(db,'shared_schedules')));
+      await assertFails(getDocs(query(collection(db,'shared_schedules'),where('monthId','==','2026-11'),limit(1))));
+      await assertFails(updateDoc(doc(db,'shared_schedules/'+token),{revoked:true}));
       await assertFails(setDoc(doc(db,'shared_schedules/'+token),projection));
       await assertFails(deleteDoc(doc(db,'shared_schedules/'+token)));
       await assertFails(getDoc(doc(db,'shared_schedules/'+'b'.repeat(48))));

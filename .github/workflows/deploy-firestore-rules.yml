@@ -1,0 +1,81 @@
+name: Deploy AKYS Firestore Rules
+
+# Explicit production operation; application pushes do not deploy rules.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firestore-rules-production
+  cancel-in-progress: false
+
+jobs:
+  security-tests:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout requested main commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tool/firestore-tests/package-lock.json
+
+      - name: Set up Java for the local emulator
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install locked security test tools
+        run: npm ci --prefix tool/firestore-tests --no-audit --no-fund
+
+      - name: Test security rules against demo-akys only
+        run: npm test --prefix tool/firestore-tests
+
+  deploy-rules:
+    needs: security-tests
+    if: github.ref == 'refs/heads/main' && needs.security-tests.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the same tested commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tool/firestore-tests/package-lock.json
+
+      - name: Install locked Firebase CLI and verification tools
+        run: npm ci --prefix tool/firestore-tests --no-audit --no-fund
+
+      - name: Verify deploy configuration and CLI
+        run: |
+          node -e "const c=require('./firebase.json'); if(c.firestore.rules!=='firestore.rules') process.exit(1);"
+          tool/firestore-tests/node_modules/.bin/firebase --version
+
+      - name: Authenticate using the existing repository secret
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_AKYS }}
+
+      - name: Deploy Firestore security rules only
+        run: tool/firestore-tests/node_modules/.bin/firebase deploy --only firestore:rules --project akys-d708a --config firebase.json --non-interactive
+
+      - name: Verify the active production rules and anonymous read denials
+        env:
+          NODE_PATH: tool/firestore-tests/node_modules
+        run: node tool/firestore-tests/verify-production-rules.cjs
