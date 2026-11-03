@@ -5,29 +5,52 @@ import '../core/auth/auth_gate.dart';
 
 import '../modules/operative_notes/operative_notes_module.dart';
 import '../modules/work_schedule/work_schedule_module.dart';
+import '../modules/work_schedule/data/schedule_repository.dart';
+import '../modules/work_schedule/presentation/schedule_page.dart';
+import '../modules/work_schedule/presentation/shared_schedule_page.dart';
+import '../core/theme/akys_colors.dart';
+
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 class AkysApp extends StatelessWidget {
-  const AkysApp({required this.auth, super.key});
+  const AkysApp({required this.auth, this.scheduleRepository, super.key});
 
   final AuthService auth;
+  final ScheduleRepository? scheduleRepository;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'AKYS',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF176B65)),
-        scaffoldBackgroundColor: const Color(0xFFF7F9F8),
-      ),
-      // No route is public today, including unknown and future /share paths.
-      onGenerateRoute: (settings) => MaterialPageRoute<void>(
-        settings: settings,
-        builder: (_) => AuthGate(
-          auth: auth,
-          child: _HomePage(auth: auth),
-        ),
-      ),
+      theme: AkysColors.theme,
+      locale: const Locale('tr'),
+      supportedLocales: const [Locale('tr')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      onGenerateRoute: (settings) {
+        final match = RegExp(r'^/shared/schedule/([a-f0-9]{48})$')
+            .firstMatch(settings.name ?? '');
+        return MaterialPageRoute<void>(
+          settings: settings,
+          builder: (_) => match != null
+              ? SharedSchedulePage(
+                  token: match.group(1)!,
+                  repository:
+                      scheduleRepository ?? FirestoreScheduleRepository(),
+                )
+              : AuthGate(
+                  auth: auth,
+                  child: settings.name == '/work_schedule'
+                      ? SchedulePage(
+                          repository:
+                              scheduleRepository ??
+                              FirestoreScheduleRepository(),
+                          logout: LogoutButton(auth: auth),
+                        )
+                      : _HomePage(auth: auth),
+                ),
+        );
+      },
     );
   }
 }
@@ -56,17 +79,24 @@ class _HomePage extends StatelessWidget {
                 for (final module in [workScheduleModule, operativeNotesModule])
                   Card(
                     margin: const EdgeInsets.only(bottom: 12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(module.title, style: textTheme.titleMedium),
-                          if (module.comingSoon) ...[
-                            const SizedBox(height: 8),
-                            const Text('Yakında'),
+                    child: InkWell(
+                      onTap: module == workScheduleModule
+                          ? () =>
+                                Navigator.of(context)
+                                    .pushNamed('/work_schedule')
+                          : null,
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(module.title, style: textTheme.titleMedium),
+                            if (module.comingSoon) ...[
+                              const SizedBox(height: 8),
+                              const Text('Yakında'),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ),

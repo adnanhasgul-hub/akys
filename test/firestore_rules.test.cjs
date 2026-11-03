@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
-const { doc, getDoc, setDoc, deleteDoc } = require('firebase/firestore');
+const { doc, getDoc, setDoc, deleteDoc, collection, getDocs, Timestamp } = require('firebase/firestore');
 
 (async () => {
   if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('Local emulator required');
@@ -25,6 +25,33 @@ const { doc, getDoc, setDoc, deleteDoc } = require('firebase/firestore');
       await assertSucceeds(getDoc(ref));
       await assertSucceeds(deleteDoc(ref));
     }
-    console.log('Firestore rules: anonymous/non-admin denied; two admins allowed.');
+    const admin = env.authenticatedContext('sharing-admin', { admin: true }).firestore();
+    const anon = env.unauthenticatedContext().firestore();
+    const user = env.authenticatedContext('sharing-user').firestore();
+    const token = 'a'.repeat(48);
+    const ref = doc(admin, 'shared_schedules/' + token);
+    const projection = { schemaVersion: 1, monthId: '2026-11', title: '2026 Kasım', year: 2026, month: 11, days: 30, people: [], duties: {}, dailyTasks: {}, revoked: false, createdAt: Timestamp.now(), expiresAt: Timestamp.fromMillis(Date.now()+86400000) };
+    for (const db of [anon, user]) {
+      for (const path of ['work_schedule/main', 'work_schedule/main/personnel/p1', 'work_schedule/main/months/2026-11', 'work_schedule/main/months/2026-11/constraints/p1', 'work_schedule/main/months/2026-11/duties/1', 'work_schedule/main/months/2026-11/task_assignments/ward', 'work_schedule/main/months/2026-11/task_overrides/a']) {
+        await assertFails(getDoc(doc(db,path)));
+        await assertFails(setDoc(doc(db,path), {probe:true}));
+      }
+    }
+    await assertSucceeds(setDoc(ref, projection));
+    for (const db of [anon,user]) {
+      await assertSucceeds(getDoc(doc(db, 'shared_schedules/' + token)));
+      await assertFails(getDocs(collection(db,'shared_schedules')));
+      await assertFails(setDoc(doc(db,'shared_schedules/'+token),projection));
+      await assertFails(deleteDoc(doc(db,'shared_schedules/'+token)));
+      await assertFails(getDoc(doc(db,'shared_schedules/'+'b'.repeat(48))));
+    }
+    await assertFails(setDoc(ref, {...projection, constraints: {private:true}}));
+    await assertSucceeds(setDoc(ref,{...projection,revoked:true}));
+    await assertFails(getDoc(doc(anon,'shared_schedules/'+token)));
+    await assertSucceeds(setDoc(ref,{...projection,expiresAt:Timestamp.fromMillis(1)}));
+    await assertFails(getDoc(doc(anon,'shared_schedules/'+token)));
+    await assertSucceeds(setDoc(doc(admin,'shared_schedules/short'),projection));
+    await assertFails(getDoc(doc(anon,'shared_schedules/short')));
+    console.log('Firestore rules: private admin-only, public token GET only, revocation, expiry and projection allowlist passed.');
   } finally { await env.cleanup(); }
 })().catch(error => { console.error(error.message); process.exitCode = 1; });

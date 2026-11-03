@@ -7,17 +7,25 @@ environment:
   sdk: ^3.13.7
 
 dependencies:
+  archive: ^4.6.0
+  cloud_firestore: ^7.1.0
   firebase_auth: ^7.0.1
   firebase_core: ^5.1.0
   flutter:
     sdk: flutter
   flutter_web_plugins:
     sdk: flutter
+  share_plus: ^13.3.1
+  web: ^1.1.2
+
+  flutter_localizations:
+    sdk: flutter
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  fake_cloud_firestore: ^4.5.0
 
 flutter:
   uses-material-design: true

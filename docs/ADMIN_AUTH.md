@@ -12,10 +12,12 @@ sıfırlama akışı yoktur. Kullanıcı parolası, token veya UID kaynak koda g
   authenticated olmak admin yetkisi vermez. Birden fazla admin aynı yöntemle desteklenir.
 - Claim yoksa erişim reddedilir. Kontrol sürerken/hata durumunda private shell
   oluşturulmaz. Eski async sonuçlar yeni oturuma uygulanmaz.
-- `AuthGate` tüm mevcut route'ları korur. Doğrudan deep link, unknown route ve
+- `AuthGate` tüm private route'ları korur. Doğrudan deep link, unknown route ve
   geri navigasyon auth kontrolünü atlamaz. Oturum kapatıldığında shell kaldırılır.
-- Gelecekte `/share/{token}` için router'da açık bir public dal eklenebilir.
-  Şu anda public route veya anonymous veri erişimi uygulanmamıştır.
+- V1 ile yalnızca `/shared/schedule/{48-hex-token}` için ayrı bir public dal vardır.
+  Bu ekran private koleksiyonları okuyamaz; minimum projection kullanır. Ayrıntılar
+  [WORK_SCHEDULE_V1.md](WORK_SCHEDULE_V1.md) içindedir. Public projection kuralları
+  bu görevde production'a deploy edilmemiştir.
 - Flutter istemcisindeki gate tek başına veri güvenliği sağlamaz. Sunucudaki
   Firestore rules aynı signed claim'i zorunlu kılmalıdır.
 

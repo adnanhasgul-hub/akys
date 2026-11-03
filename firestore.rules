@@ -4,9 +4,25 @@ service cloud.firestore {
     function isAdmin() {
       return request.auth != null && request.auth.token.get('admin', false) == true;
     }
-    // No data model or public share exception exists yet.
-    match /{document=**} {
-      allow read, write: if isAdmin();
+    // Capability URL: no enumeration, no anonymous writes and no private reads.
+    match /shared_schedules/{token} {
+      allow get: if isAdmin() || (
+        token.matches('^[a-f0-9]{48}$') &&
+        resource.data.revoked == false &&
+        resource.data.expiresAt is timestamp &&
+        resource.data.expiresAt > request.time
+      );
+      allow list: if isAdmin();
+      allow create, update: if isAdmin() && request.resource.data.keys().hasOnly([
+        'schemaVersion', 'monthId', 'title', 'year', 'month', 'days',
+        'people', 'duties', 'dailyTasks', 'revoked', 'createdAt', 'expiresAt'
+      ]);
+      allow delete: if isAdmin();
+    }
+    match /{collection}/{document=**} {
+      // The original admin-only boundary is retained for all private data.
+      // Exclude shares so the projection write allowlist cannot be bypassed.
+      allow read, write: if isAdmin() && collection != 'shared_schedules';
     }
   }
 }

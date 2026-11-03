@@ -4,7 +4,7 @@ import 'auth_service.dart';
 import 'auth_state.dart';
 import 'login_screen.dart';
 
-/// Every current route is private. Future public share routes must be explicitly
+/// Guards every private route. The capability-token share route is explicitly
 /// separated at the app router; unknown routes never become public implicitly.
 class AuthGate extends StatelessWidget {
   const AuthGate({required this.auth, required this.child, super.key});

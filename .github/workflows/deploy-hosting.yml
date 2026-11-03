@@ -28,6 +28,25 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Set up Node for security tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tool/firestore-tests/package-lock.json
+
+      - name: Set up Java for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install security test tools
+        run: npm ci --prefix tool/firestore-tests --no-audit --no-fund
+
+      - name: Test Firestore security rules locally
+        run: npm test --prefix tool/firestore-tests
+
       - name: Install dependencies
         run: flutter pub get
 
