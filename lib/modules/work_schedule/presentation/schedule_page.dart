@@ -310,7 +310,7 @@ class _SchedulePageState extends State<SchedulePage> {
           style: Theme.of(context).textTheme.titleLarge,
         ),
         Text(
-          '${c.month!.people.length} snapshot personeli · ${c.month!.requiredDuties} aylık nöbet · Motor 1.0.0',
+          '${c.month!.people.length} snapshot personeli · ${c.month!.requiredDuties} aylık nöbet · Motor ${c.month!.engineVersion}',
         ),
         const SizedBox(height: 12),
         FilledButton(
@@ -382,75 +382,125 @@ class _SchedulePageState extends State<SchedulePage> {
             after.insert(newIndex, after.removeAt(oldIndex));
             await c.updatePeople(after);
           },
-          itemBuilder: (context, i) {
-            final p = c.personnel[i];
-            return Card(
-              key: ValueKey(p.id),
-              child: ListTile(
-                leading: rankBadge(p.seniorityRank),
-                title: Text(p.displayName),
-                subtitle: Text(
-                  p.active ? 'Asistan hekim · Aktif' : 'Asistan hekim · Pasif',
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      tooltip: 'İsmi düzenle',
-                      onPressed: c.busy
-                          ? null
-                          : () async {
-                              final name = await textInput(
-                                'İsmi düzenle',
-                                initial: p.displayName,
-                              );
-                              if (name != null) {
-                                await c.updatePeople([
-                                  for (final x in c.personnel)
-                                    if (x.id == p.id) x.copy(name: name) else x,
-                                ]);
-                              }
-                            },
-                      icon: const Icon(Icons.edit_outlined),
-                    ),
-                    Switch(
-                      value: p.active,
-                      onChanged: c.busy
-                          ? null
-                          : (active) async {
-                              if (!active &&
-                                  !await confirm(
-                                    'Personeli pasifleştir',
-                                    '${p.displayName} yeni aylara dahil edilmeyecek. Geçmiş aylar korunacak.',
-                                  )) {
-                                return;
-                              }
-                              await c.updatePeople([
-                                for (final x in c.personnel)
-                                  if (x.id == p.id)
-                                    x.copy(active: active)
-                                  else
-                                    x,
-                              ]);
-                            },
-                    ),
-                    ReorderableDragStartListener(
-                      index: i,
-                      enabled: !c.busy,
-                      child: const Padding(
-                        padding: EdgeInsets.all(8),
-                        child: Icon(Icons.drag_handle),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
+          itemBuilder: (context, i) => _personCard(c.personnel[i], i),
         ),
       ),
     ],
   );
+  Widget _personCard(Personnel p, int index) => Card(
+    key: ValueKey(p.id),
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              rankBadge(p.seniorityRank),
+              const SizedBox(width: 8),
+              Expanded(child: Text(p.displayName)),
+              IconButton(
+                tooltip: 'İsmi düzenle',
+                onPressed: c.busy
+                    ? null
+                    : () async {
+                        final name = await textInput(
+                          'İsmi düzenle',
+                          initial: p.displayName,
+                        );
+                        if (name != null) {
+                          await c.updatePeople([
+                            for (final x in c.personnel)
+                              if (x.id == p.id) x.copy(name: name) else x,
+                          ]);
+                        }
+                      },
+                icon: const Icon(Icons.edit_outlined),
+              ),
+              ReorderableDragStartListener(
+                index: index,
+                enabled: !c.busy,
+                child: const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(Icons.drag_handle),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 16,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Switch(
+                    value: p.active,
+                    onChanged: c.busy
+                        ? null
+                        : (active) async {
+                            if (!active &&
+                                !await confirm(
+                                  'Personeli pasifleştir',
+                                  '${p.displayName} yeni aylara dahil edilmeyecek. Geçmiş aylar korunacak.',
+                                )) {
+                              return;
+                            }
+                            await c.updatePeople([
+                              for (final x in c.personnel)
+                                if (x.id == p.id) x.copy(active: active) else x,
+                            ]);
+                          },
+                  ),
+                  Text(p.active ? 'Aktif' : 'Pasif'),
+                ],
+              ),
+              SizedBox(
+                width: 180,
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Nöbet Grubu',
+                    isDense: true,
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<DutySeniorityGroup>(
+                      key: ValueKey('duty-group-${p.id}'),
+                      value: p.dutySeniorityGroup,
+                      isExpanded: true,
+                      isDense: true,
+                      items: [
+                        for (final group in DutySeniorityGroup.values)
+                          DropdownMenuItem(
+                            value: group,
+                            child: Text(dutyGroupLabel(group)),
+                          ),
+                      ],
+                      onChanged: c.busy
+                          ? null
+                          : (group) async {
+                              if (group != null) {
+                                await c.updatePeople([
+                                  for (final x in c.personnel)
+                                    if (x.id == p.id)
+                                      x.copy(dutySeniorityGroup: group)
+                                    else
+                                      x,
+                                ]);
+                              }
+                            },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
+
   Future<void> _createMonth() async {
     if (c.personnel.where((p) => p.active).isEmpty) {
       c.error = 'Önce aktif personel ekleyin.';
@@ -596,6 +646,20 @@ class _SchedulePageState extends State<SchedulePage> {
                 ),
               ),
               OutlinedButton.icon(
+                onPressed: c.busy
+                    ? null
+                    : () async {
+                        if (await confirm(
+                          'Ayın Gruplarını Güncelle',
+                          'Yalnızca bu taslak ayın nöbet grupları güncel personel listesinden alınacak. İsimler ve kıdem sırası korunur. Grup değişmişse mevcut nöbetler temizlenir; yeniden oluşturmanız gerekir.',
+                        )) {
+                          await c.refreshMonthGroups();
+                        }
+                      },
+                icon: const Icon(Icons.sync),
+                label: const Text('Ayın Gruplarını Güncelle'),
+              ),
+              OutlinedButton.icon(
                 onPressed: c.busy ? null : () => _precheck(m),
                 icon: const Icon(Icons.fact_check_outlined),
                 label: const Text('Ön kontrol'),
@@ -636,6 +700,9 @@ class _SchedulePageState extends State<SchedulePage> {
           Text(
             'Canlı İstatistikler',
             style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const Text(
+            'Tek: tek kişi · Eşli: en az iki kişi · Çömezli: yanında en az bir Çömez grubu hekim var.',
           ),
           _statistics(m),
         ],
@@ -1003,6 +1070,14 @@ class _SchedulePageState extends State<SchedulePage> {
                       '$d · ${dayNames[m.date(d).weekday - 1]}',
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
+                    if (compositionWarning(m, d) != null)
+                      Tooltip(
+                        message: compositionWarning(m, d)!,
+                        child: const Text(
+                          '⚠ Kıdemli + Çömez eşleşmesi yok',
+                          style: TextStyle(fontSize: 11),
+                        ),
+                      ),
                     if (m.manuallyEdited.contains(d))
                       const Text(
                         '✎ Manuel düzenlendi',
@@ -1135,7 +1210,11 @@ class _SchedulePageState extends State<SchedulePage> {
         columns: [
           for (final label in [
             'Personel',
+            'Nöbet Grubu',
             'Toplam',
+            'Tek',
+            'Eşli',
+            'Çömezli',
             'Pzt/Sal/Çar',
             'Perşembe',
             'Cuma',
@@ -1149,7 +1228,11 @@ class _SchedulePageState extends State<SchedulePage> {
             DataRow(
               cells: [
                 DataCell(personChip(p)),
+                DataCell(Text(dutyGroupLabel(p.dutySeniorityGroup))),
                 DataCell(Text('${stats[p.personId]!.total}')),
+                DataCell(Text('${stats[p.personId]!.solo}')),
+                DataCell(Text('${stats[p.personId]!.paired}')),
+                DataCell(Text('${stats[p.personId]!.withJunior}')),
                 for (final n in stats[p.personId]!.categories)
                   DataCell(Text('$n')),
               ],

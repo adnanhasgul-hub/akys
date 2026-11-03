@@ -26,6 +26,7 @@ abstract class ScheduleRepository {
   Stream<List<ScheduleMonth>> watchMonths();
   Future<ScheduleMonth?> loadMonth(String id);
   Future<ScheduleMonth> saveMonth(ScheduleMonth month, {bool create = false});
+  Future<ScheduleMonth> refreshMonthDutyGroups(ScheduleMonth month);
   Future<String> share(ScheduleMonth month);
   Future<void> revoke(ScheduleMonth month, String token);
   Stream<Map<String, dynamic>?> watchShared(String token);
@@ -91,7 +92,30 @@ class FirestoreScheduleRepository implements ScheduleRepository {
     ]..sort((a, b) => a.seniorityRank.compareTo(b.seniorityRank));
     await db.runTransaction((tx) async {
       final registry = await tx.get(root);
-      if (registry.data()?['personnel'] != null) return;
+      final stored = registry.data()?['personnel'] as List?;
+      if (stored != null) {
+        final migrated = [
+          for (final raw in stored)
+            {
+              ...Map<String, dynamic>.from(raw as Map),
+              'dutySeniorityGroup': readDutyGroup(
+                raw['dutySeniorityGroup'],
+                raw['seniorityRank'] as int,
+              ).name,
+            },
+        ];
+        if (canonical(stored) != canonical(migrated)) {
+          tx.update(root, {'personnel': migrated});
+          for (final raw in migrated) {
+            tx.set(
+              root.collection('personnel').doc(raw['id'] as String),
+              Personnel.fromJson(raw).toJson(),
+              SetOptions(merge: true),
+            );
+          }
+        }
+        return;
+      }
       final people = seedPersonnel(
         found,
         DateTime.now().toUtc().toIso8601String(),
@@ -132,7 +156,11 @@ class FirestoreScheduleRepository implements ScheduleRepository {
     final ranked = reorderPersonnel(after, after.map((p) => p.id).toList());
     await db.runTransaction((tx) async {
       final snapshot = await tx.get(root);
-      if (canonical(snapshot.data()?['personnel']) !=
+      final current = [
+        for (final raw in snapshot.data()?['personnel'] as List? ?? [])
+          Personnel.fromJson(Map<String, dynamic>.from(raw as Map)),
+      ]..sort((a, b) => a.seniorityRank.compareTo(b.seniorityRank));
+      if (canonical(current.map((p) => p.toJson()).toList()) !=
           canonical(before.map((p) => p.toJson()).toList())) {
         throw const ScheduleConflict(
           'Personel başka bir oturumda değişti. Listeyi yeniden yükleyin.',
@@ -215,6 +243,68 @@ class FirestoreScheduleRepository implements ScheduleRepository {
         );
       }
       tx.set(ref, next.toJson());
+      return next;
+    });
+  }
+
+  /// The only operation allowed to explicitly change groups in an existing
+  /// snapshot. Rank/name/activeAtCreation stay frozen; a draft is required.
+  @override
+  Future<ScheduleMonth> refreshMonthDutyGroups(ScheduleMonth month) async {
+    return db.runTransaction((tx) async {
+      final stored = await tx.get(months.doc(month.id));
+      final registry = await tx.get(root);
+      if (!stored.exists) throw const ScheduleConflict('Ay bulunamadı.');
+      final next = ScheduleMonth.fromJson(stored.data()!);
+      if (next.revision != month.revision) {
+        throw const ScheduleConflict(
+          'Ay başka bir oturumda değişti. Yeniden yükleyin.',
+        );
+      }
+      if (!next.editable) {
+        throw const ScheduleConflict('Önce ayı düzenlemeye açın.');
+      }
+      final current = {
+        for (final raw in registry.data()?['personnel'] as List? ?? [])
+          (raw as Map)['id'] as String: Personnel.fromJson(
+            Map<String, dynamic>.from(raw),
+          ),
+      };
+      if (next.people.any((p) => !current.containsKey(p.personId))) {
+        throw const ScheduleConflict(
+          'Snapshot personeli güncel listede bulunamadı; grup güncellemesi yapılamadı.',
+        );
+      }
+      final before = {
+        for (final p in next.people) p.personId: p.dutySeniorityGroup.name,
+      };
+      final after = {
+        for (final p in next.people)
+          p.personId: current[p.personId]!.dutySeniorityGroup.name,
+      };
+      if (canonical(before) == canonical(after)) return next;
+      final now = DateTime.now().toUtc().toIso8601String();
+      for (var i = 0; i < next.people.length; i++) {
+        final p = next.people[i];
+        next.people[i] = PersonSnapshot(
+          p.personId,
+          p.displayName,
+          p.seniorityRank,
+          activeAtCreation: p.activeAtCreation,
+          dutySeniorityGroup: current[p.personId]!.dutySeniorityGroup,
+        );
+      }
+      next.duties.clear();
+      next.manuallyEdited.clear();
+      next.snapshotGroupUpdates.add({
+        'at': now,
+        'before': before,
+        'after': after,
+      });
+      next.schemaVersion = 2;
+      next.revision++;
+      next.updatedAt = now;
+      tx.set(months.doc(next.id), next.toJson());
       return next;
     });
   }

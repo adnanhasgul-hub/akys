@@ -61,8 +61,14 @@ void main() {
       final b = a.clone();
       b.duties[days[1]] = ['p1'];
       b.duties[others[0]] = ['p2'];
-      expect(objective(a)[0], objective(b)[0]);
-      expect(objective(a)[2], lessThan(objective(b)[2]));
+      expect(
+        objective(a)[DutyObjective.totalFairness.index],
+        objective(b)[DutyObjective.totalFairness.index],
+      );
+      expect(
+        objective(a)[DutyObjective.categoryFairness.index],
+        lessThan(objective(b)[DutyObjective.categoryFairness.index]),
+      );
     });
   }
   test('Thu to Sun penalty rejects same-week pairing at equal categories', () {
@@ -76,7 +82,10 @@ void main() {
     final b = a.clone();
     b.duties[8] = ['p1'];
     b.duties[15] = ['p2'];
-    expect(objective(a).take(3), objective(b).take(3));
+    expect(
+      objective(a).take(DutyObjective.thuSun.index),
+      objective(b).take(DutyObjective.thuSun.index),
+    );
     expect(compareScore(objective(a), objective(b)), lessThan(0));
   });
   test('Second person prefers a senior duty partner', () {
@@ -99,7 +108,10 @@ void main() {
     final b = a.clone();
     b.duties[2] = ['p1', 'p5'];
     b.duties[9] = ['p2', 'p6', 'p9'];
-    expect(objective(a).take(10), objective(b).take(10));
+    expect(
+      objective(a).take(DutyObjective.thirdPerson.index),
+      objective(b).take(DutyObjective.thirdPerson.index),
+    );
     expect(compareScore(objective(a), objective(b)), lessThan(0));
   });
   test('Staffing smoothness penalizes 1/3 oscillation', () {
@@ -111,7 +123,10 @@ void main() {
     final b = a.clone();
     b.duties[2] = ['p1'];
     b.duties[9] = ['p2', 'p3', 'p4'];
-    expect(objective(a)[8], lessThan(objective(b)[8]));
+    expect(
+      objective(a)[DutyObjective.staffing.index],
+      lessThan(objective(b)[DutyObjective.staffing.index]),
+    );
   });
   test(
     'Seven people, 54 duties: junior never gets the equal lower-load advantage',

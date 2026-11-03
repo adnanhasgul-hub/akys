@@ -1,8 +1,15 @@
 import '../domain/models.dart';
 
 class DutyStatistics {
-  DutyStatistics(this.total, this.categories);
+  DutyStatistics(
+    this.total,
+    this.categories, {
+    this.solo = 0,
+    this.paired = 0,
+    this.withJunior = 0,
+  });
   final int total;
+  final int solo, paired, withJunior;
   final List<int> categories;
 }
 
@@ -21,6 +28,24 @@ Map<String, DutyStatistics> statistics(ScheduleMonth m) => {
               )
               .length,
       ],
+      solo: m.duties.values
+          .where((ids) => ids.length == 1 && ids.contains(p.personId))
+          .length,
+      paired: m.duties.values
+          .where((ids) => ids.length >= 2 && ids.contains(p.personId))
+          .length,
+      withJunior: m.duties.values
+          .where(
+            (ids) =>
+                ids.contains(p.personId) &&
+                ids.any(
+                  (id) =>
+                      id != p.personId &&
+                      m.person(id).dutySeniorityGroup ==
+                          DutySeniorityGroup.junior,
+                ),
+          )
+          .length,
     ),
 };
 
@@ -122,6 +147,60 @@ class GenerationResult {
   final bool searchLimited;
 }
 
+bool preferredDutyComposition(ScheduleMonth m, List<String> ids) =>
+    ids.any(
+      (id) => m.person(id).dutySeniorityGroup == DutySeniorityGroup.senior,
+    ) &&
+    ids.any(
+      (id) => m.person(id).dutySeniorityGroup == DutySeniorityGroup.junior,
+    );
+String? compositionWarning(ScheduleMonth m, int day) {
+  final ids = m.duties[day] ?? <String>[];
+  return ids.length >= 2 && !preferredDutyComposition(m, ids)
+      ? 'Tercih edilen Kıdemli + Çömez eşleşmesi sağlanamadı.'
+      : null;
+}
+
+enum DutyObjective {
+  staffing,
+  composition,
+  seniorCompanionPriority,
+  totalFairness,
+  totalSeniority,
+  categoryFairness,
+  thuSun,
+  thursdaySeniority,
+  fridaySeniority,
+  saturdaySeniority,
+  sundaySeniority,
+  pairing,
+  thirdPerson,
+}
+
+// Ordering only: homogeneous-group candidates are never filtered out.
+(int, int) _placementPreference(ScheduleMonth m, int day, String candidate) {
+  final ids = [...m.duties[day] ?? <String>[], candidate];
+  if (ids.length < 2) return (0, 0);
+  final mixed = preferredDutyComposition(m, ids);
+  return (
+    mixed ? 0 : 1,
+    mixed
+        ? ids
+              .where(
+                (id) =>
+                    m.person(id).dutySeniorityGroup ==
+                    DutySeniorityGroup.senior,
+              )
+              .fold<int>(0, (n, id) => n + m.person(id).seniorityRank)
+        : 0,
+  );
+}
+
+int _comparePreference((int, int) a, (int, int) b) {
+  final c = a.$1.compareTo(b.$1);
+  return c != 0 ? c : a.$2.compareTo(b.$2);
+}
+
 /// Lexicographic objective: hard feasibility is never traded for any score.
 List<int> objective(ScheduleMonth m) {
   final s = statistics(m);
@@ -133,7 +212,9 @@ List<int> objective(ScheduleMonth m) {
       thuSun = 0,
       pairing = 0,
       third = 0,
-      staffing = 0;
+      staffing = 0,
+      composition = 0,
+      seniorCompanionPriority = 0;
   final categoryPreference = List<int>.filled(4, 0);
   for (var i = 0; i < people.length; i++) {
     final p = people[i], stats = s[people[i].personId]!;
@@ -161,18 +242,29 @@ List<int> objective(ScheduleMonth m) {
         ids.map((id) => people.indexWhere((p) => p.personId == id) + 1).toList()
           ..sort();
     if (ranks.length >= 2) {
-      if (ranks.first > 4) pairing += ranks.last;
+      if (!preferredDutyComposition(m, ids)) {
+        composition++;
+      } else {
+        for (final id in ids) {
+          final p = m.person(id);
+          if (p.dutySeniorityGroup == DutySeniorityGroup.senior) {
+            seniorCompanionPriority += p.seniorityRank;
+          }
+        }
+      }
       pairing += ranks.first;
     }
     if (ranks.length == 3) third += ranks[1];
   }
   return [
+    staffing,
+    composition,
+    seniorCompanionPriority,
     totals,
     seniority,
     categories,
     thuSun,
     ...categoryPreference,
-    staffing,
     pairing,
     third,
   ];
@@ -324,6 +416,11 @@ class DutyEngine {
           final stats = statistics(m);
           final cat = dayCategory(m.date(day));
           candidates.sort((a, b) {
+            final preference = _comparePreference(
+              _placementPreference(m, day!, a),
+              _placementPreference(m, day, b),
+            );
+            if (preference != 0) return preference;
             int cost(String id) {
               final p = m.person(id);
               final s = stats[id]!;
@@ -348,21 +445,7 @@ class DutyEngine {
           return false;
         }
 
-        if (solve()) {
-          _optimize(m);
-          for (final ids in m.duties.values) {
-            ids.sort(
-              (a, b) => m
-                  .person(a)
-                  .seniorityRank
-                  .compareTo(m.person(b).seniorityRank),
-            );
-          }
-          final errors = validateDuties(m);
-          return errors.isEmpty
-              ? GenerationResult(month: m)
-              : GenerationResult(errors: errors);
-        }
+        if (solve()) return optimize(m);
         m.duties
           ..clear()
           ..addAll(initial);
@@ -505,6 +588,11 @@ class DutyEngine {
           }
         }
         moves.sort((a, b) {
+          final preference = _comparePreference(
+            _placementPreference(m, a.$2, a.$1),
+            _placementPreference(m, b.$2, b.$1),
+          );
+          if (preference != 0) return preference;
           int cost((String, int) move) =>
               (m.duties[move.$2]?.length ?? 0) * 1000 +
               counts[move.$1]! * 100 +
@@ -523,18 +611,26 @@ class DutyEngine {
         return false;
       }
 
-      if (solve()) {
-        _optimize(m);
-        for (final ids in m.duties.values) {
-          ids.sort(
-            (a, b) =>
-                m.person(a).seniorityRank.compareTo(m.person(b).seniorityRank),
-          );
-        }
-        return GenerationResult(month: m);
-      }
+      if (solve()) return optimize(m);
     }
     return GenerationResult(searchLimited: anyLimited);
+  }
+
+  /// Hard-checked deterministic improvement; the caller's schedule is untouched.
+  GenerationResult optimize(ScheduleMonth input) {
+    final errors = validateDuties(input);
+    if (errors.isNotEmpty) return GenerationResult(errors: errors);
+    final m = input.clone()
+      ..schemaVersion = 2
+      ..engineVersion = '1.1.0';
+    _optimize(m);
+    for (final ids in m.duties.values) {
+      ids.sort(
+        (a, b) =>
+            m.person(a).seniorityRank.compareTo(m.person(b).seniorityRank),
+      );
+    }
+    return GenerationResult(month: m);
   }
 
   void _optimize(ScheduleMonth m) {
@@ -543,29 +639,36 @@ class DutyEngine {
       var changed = false;
       for (var a = 1; a <= m.days; a++) {
         for (var b = a + 1; b <= m.days; b++) {
-          // Both single relocations and swaps allow staffing and category repair.
-          for (final x in [...m.duties[a] ?? <String>[]]) {
-            for (final y in <String?>[null, ...m.duties[b] ?? <String>[]]) {
-              if (x == y ||
-                  (m.duties[b] ?? []).contains(x) ||
-                  (y != null && (m.duties[a] ?? []).contains(y))) {
-                continue;
-              }
-              final oldA = [...m.duties[a] ?? <String>[]],
-                  oldB = [...m.duties[b] ?? <String>[]];
-              m.duties[a]!.remove(x);
-              m.duties.putIfAbsent(b, () => []).add(x);
-              if (y != null) {
-                m.duties[b]!.remove(y);
-                m.duties[a]!.add(y);
-              }
-              final score = objective(m);
-              if (compareScore(score, best) < 0 && validateDuties(m).isEmpty) {
-                best = score;
-                changed = true;
-              } else {
-                m.duties[a] = oldA;
-                m.duties[b] = oldB;
+          // Reverse moves matter when fixed seniors cannot swap their dates.
+          for (var direction = 0; direction < 2; direction++) {
+            final from = direction == 0 ? a : b, to = direction == 0 ? b : a;
+            for (final x in [...m.duties[from] ?? <String>[]]) {
+              for (final y in <String?>[
+                null,
+                if (direction == 0) ...m.duties[to] ?? <String>[],
+              ]) {
+                if (x == y ||
+                    (m.duties[to] ?? []).contains(x) ||
+                    (y != null && (m.duties[from] ?? []).contains(y))) {
+                  continue;
+                }
+                final oldFrom = [...m.duties[from] ?? <String>[]],
+                    oldTo = [...m.duties[to] ?? <String>[]];
+                m.duties[from]!.remove(x);
+                m.duties.putIfAbsent(to, () => []).add(x);
+                if (y != null) {
+                  m.duties[to]!.remove(y);
+                  m.duties[from]!.add(y);
+                }
+                final score = objective(m);
+                if (compareScore(score, best) < 0 &&
+                    validateDuties(m).isEmpty) {
+                  best = score;
+                  changed = true;
+                } else {
+                  m.duties[from] = oldFrom;
+                  m.duties[to] = oldTo;
+                }
               }
             }
           }

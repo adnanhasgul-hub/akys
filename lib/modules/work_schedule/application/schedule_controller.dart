@@ -106,6 +106,7 @@ class ScheduleController extends ChangeNotifier {
         id: randomId(),
         displayName: name.trim(),
         seniorityRank: personnel.length + 1,
+        dutySeniorityGroup: DutySeniorityGroup.junior,
         createdAt: now,
         updatedAt: now,
       ),
@@ -123,7 +124,12 @@ class ScheduleController extends ChangeNotifier {
       month: month,
       people: [
         for (final p in active)
-          PersonSnapshot(p.id, p.displayName, p.seniorityRank),
+          PersonSnapshot(
+            p.id,
+            p.displayName,
+            p.seniorityRank,
+            dutySeniorityGroup: p.dutySeniorityGroup,
+          ),
       ],
       createdAt: now,
       updatedAt: now,
@@ -158,6 +164,13 @@ class ScheduleController extends ChangeNotifier {
   Future<bool> save(ScheduleMonth next, {String? success}) => run(() async {
     _accept(await repository.saveMonth(next));
   }, success: success ?? 'Değişiklikler kaydedildi.');
+  Future<bool> refreshMonthGroups() => run(
+    () async {
+      _accept(await repository.refreshMonthDutyGroups(month!));
+    },
+    success: 'Ayın nöbet grupları açık onayla güncellendi. Değişiklik varsa nöbetler temizlendi; yeniden oluşturun.',
+  );
+
   Future<bool> generate() => run(() async {
     final current = month;
     if (current == null || !current.editable) {

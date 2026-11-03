@@ -38,6 +38,22 @@ String randomId() {
   ).join();
 }
 
+enum DutySeniorityGroup { senior, junior }
+
+String dutyGroupLabel(DutySeniorityGroup group) => switch (group) {
+  DutySeniorityGroup.senior => 'Kıdemli',
+  DutySeniorityGroup.junior => 'Çömez',
+};
+
+/// Legacy-only migration; explicit groups never follow rank or name changes.
+DutySeniorityGroup legacyDutyGroup(int rank) =>
+    rank <= 4 ? DutySeniorityGroup.senior : DutySeniorityGroup.junior;
+DutySeniorityGroup readDutyGroup(Object? value, int rank) => switch (value) {
+  'senior' => DutySeniorityGroup.senior,
+  'junior' => DutySeniorityGroup.junior,
+  _ => legacyDutyGroup(rank),
+};
+
 class Personnel {
   const Personnel({
     required this.id,
@@ -45,18 +61,30 @@ class Personnel {
     required this.seniorityRank,
     this.active = true,
     this.profession = 'resident_physician',
+    DutySeniorityGroup? dutySeniorityGroup,
     required this.createdAt,
     required this.updatedAt,
-  });
+  }) : dutySeniorityGroup =
+           dutySeniorityGroup ??
+           (seniorityRank <= 4
+               ? DutySeniorityGroup.senior
+               : DutySeniorityGroup.junior);
   final String id, displayName, profession, createdAt, updatedAt;
   final int seniorityRank;
   final bool active;
-  Personnel copy({String? name, int? rank, bool? active}) => Personnel(
+  final DutySeniorityGroup dutySeniorityGroup;
+  Personnel copy({
+    String? name,
+    int? rank,
+    bool? active,
+    DutySeniorityGroup? dutySeniorityGroup,
+  }) => Personnel(
     id: id,
     displayName: name ?? displayName,
     seniorityRank: rank ?? seniorityRank,
     active: active ?? this.active,
     profession: profession,
+    dutySeniorityGroup: dutySeniorityGroup ?? this.dutySeniorityGroup,
     createdAt: createdAt,
     updatedAt: DateTime.now().toUtc().toIso8601String(),
   );
@@ -64,6 +92,7 @@ class Personnel {
     'id': id,
     'displayName': displayName,
     'profession': profession,
+    'dutySeniorityGroup': dutySeniorityGroup.name,
     'active': active,
     'seniorityRank': seniorityRank,
     'createdAt': createdAt,
@@ -74,6 +103,10 @@ class Personnel {
     displayName: j['displayName'] as String,
     seniorityRank: j['seniorityRank'] as int,
     active: j['active'] as bool,
+    dutySeniorityGroup: readDutyGroup(
+      j['dutySeniorityGroup'],
+      j['seniorityRank'] as int,
+    ),
     profession: j['profession'] as String,
     createdAt: j['createdAt'] as String,
     updatedAt: j['updatedAt'] as String,
@@ -98,6 +131,9 @@ List<Personnel> seedPersonnel(List<Personnel> existing, String now) =>
             id: 'initial-resident-${i + 1}',
             displayName: initialNames[i],
             seniorityRank: i + 1,
+            dutySeniorityGroup: i < 4
+                ? DutySeniorityGroup.senior
+                : DutySeniorityGroup.junior,
             createdAt: now,
             updatedAt: now,
           ),
@@ -120,21 +156,32 @@ class PersonSnapshot {
     this.displayName,
     this.seniorityRank, {
     this.activeAtCreation = true,
-  });
+    DutySeniorityGroup? dutySeniorityGroup,
+  }) : dutySeniorityGroup =
+           dutySeniorityGroup ??
+           (seniorityRank <= 4
+               ? DutySeniorityGroup.senior
+               : DutySeniorityGroup.junior);
   final String personId, displayName;
   final int seniorityRank;
   final bool activeAtCreation;
+  final DutySeniorityGroup dutySeniorityGroup;
   Map<String, dynamic> toJson() => {
     'personId': personId,
     'displayName': displayName,
     'seniorityRank': seniorityRank,
     'activeAtCreation': activeAtCreation,
+    'dutySeniorityGroup': dutySeniorityGroup.name,
   };
   factory PersonSnapshot.fromJson(Map<String, dynamic> j) => PersonSnapshot(
     j['personId'] as String,
     j['displayName'] as String,
     j['seniorityRank'] as int,
     activeAtCreation: j['activeAtCreation'] as bool,
+    dutySeniorityGroup: readDutyGroup(
+      j['dutySeniorityGroup'],
+      j['seniorityRank'] as int,
+    ),
   );
 }
 
@@ -209,6 +256,9 @@ class ScheduleMonth {
     required this.updatedAt,
     this.status = MonthStatus.draft,
     this.revision = 0,
+    this.schemaVersion = 2,
+    this.engineVersion = '1.1.0',
+    List<Map<String, dynamic>>? snapshotGroupUpdates,
     int? requiredDuties,
     this.publishedAt,
     this.boundarySource = 'manual',
@@ -231,7 +281,8 @@ class ScheduleMonth {
        manuallyEdited = manuallyEdited ?? {},
        tasks = tasks ?? {},
        overrides = overrides ?? {},
-       shareTokens = shareTokens ?? [];
+       shareTokens = shareTokens ?? [],
+       snapshotGroupUpdates = snapshotGroupUpdates ?? [];
   final int year, month;
   final List<PersonSnapshot> people;
   final String createdAt;
@@ -239,6 +290,9 @@ class ScheduleMonth {
   bool boundaryConfirmed;
   String? publishedAt;
   int revision, requiredDuties;
+  int schemaVersion;
+  String engineVersion;
+  final List<Map<String, dynamic>> snapshotGroupUpdates;
   MonthStatus status;
   final Map<String, PersonalConstraints> constraints;
   final Map<String, List<String>> boundary;
@@ -256,8 +310,9 @@ class ScheduleMonth {
   PersonSnapshot person(String id) =>
       people.firstWhere((p) => p.personId == id);
   Map<String, dynamic> toJson() => {
-    'schemaVersion': 1,
-    'engineVersion': '1.0.0',
+    'schemaVersion': schemaVersion,
+    'engineVersion': engineVersion,
+    'snapshotGroupUpdates': snapshotGroupUpdates,
     'year': year,
     'month': month,
     'status': status == MonthStatus.finalised ? 'final' : status.name,
@@ -297,6 +352,12 @@ class ScheduleMonth {
         ? MonthStatus.finalised
         : MonthStatus.values.byName(j['status'] as String),
     revision: j['revision'] as int,
+    schemaVersion: j['schemaVersion'] as int? ?? 1,
+    engineVersion: j['engineVersion'] as String? ?? '1.0.0',
+    snapshotGroupUpdates: [
+      for (final update in j['snapshotGroupUpdates'] as List? ?? [])
+        Map<String, dynamic>.from(update as Map),
+    ],
     requiredDuties: j['requiredDuties'] as int,
     publishedAt: j['publishedAt'] as String?,
     boundarySource: j['boundarySource'] as String,

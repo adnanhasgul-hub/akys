@@ -46,6 +46,12 @@ void main() {
     await tester.pumpAndSettle();
     final saved = await tester.runAsync(() => repo.watchPersonnel().first);
     expect(saved!.length, 8);
+    await tester.scrollUntilVisible(
+      find.text('Dr. Yeni'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Dr. Yeni'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
