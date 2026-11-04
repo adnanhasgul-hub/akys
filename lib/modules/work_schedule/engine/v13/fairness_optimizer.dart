@@ -37,11 +37,12 @@ class FairnessReport {
     final rank = {
       for (var i = 0; i < roleOrder.length; i++) roleOrder[i].personId: i,
     };
+    final difficulty = month.difficulty;
     for (final row in positions) {
       final day = int.parse(row.date.substring(8));
       final date = month.date(day);
-      final score = month.difficultyScore(day);
-      final holiday = month.isHoliday(day);
+      final score = difficulty.score(date);
+      final holiday = difficulty.holiday(date) != null;
       final senior = people[row.seniorDutyPersonId]!;
       senior.seniorRoles++;
       if (row.seniorRoleIsSubstitution) {
@@ -64,9 +65,7 @@ class FairnessReport {
         if (holiday) {
           p.holidays++;
         }
-        if (date.weekday == 4 &&
-            !holiday &&
-            !month.difficulty.isPreHoliday(date)) {
+        if (date.weekday == 4 && !holiday && !difficulty.isPreHoliday(date)) {
           p.easyThursday++;
         }
       }
@@ -181,6 +180,7 @@ class FairnessOptimizer {
   Future<FairnessResult> optimize(
     ScheduleMonth input, {
     SolverCancellation? cancellation,
+    void Function(int, int, int?)? onProgress,
   }) async {
     final m = input.clone();
     final result =
@@ -190,6 +190,7 @@ class FairnessOptimizer {
         ).solve(
           m,
           cancellation: cancellation,
+          onProgress: onProgress,
           lexicographicObjective: (rows) => FairnessReport(m, rows).objective,
         );
     return FairnessResult(

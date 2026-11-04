@@ -1,3 +1,5 @@
+import 'duty_positions.dart';
+
 import 'dart:math';
 
 import 'difficulty.dart';
@@ -257,6 +259,8 @@ class ScheduleMonth {
     required this.createdAt,
     required this.updatedAt,
     this.status = MonthStatus.draft,
+    this.dutyPositions,
+    this.v13Diagnostics,
     this.revision = 0,
     this.schemaVersion = 3,
     this.taskWorkdaySchemaVersion = 0,
@@ -300,6 +304,8 @@ class ScheduleMonth {
        holidayDifficultyOverrides = Map.unmodifiable(
          holidayDifficultyOverrides ?? <String, int>{},
        );
+  List<DutyPositions>? dutyPositions;
+  Map<String, dynamic>? v13Diagnostics;
   final int year, month;
   final List<PersonSnapshot> people;
   final String createdAt;
@@ -340,6 +346,9 @@ class ScheduleMonth {
   PersonSnapshot person(String id) =>
       people.firstWhere((p) => p.personId == id);
   Map<String, dynamic> toJson() => {
+    if (dutyPositions != null)
+      'dutyPositions': dutyPositions!.map((p) => p.toJson()).toList(),
+    if (v13Diagnostics != null) 'v13Diagnostics': v13Diagnostics,
     'schemaVersion': schemaVersion,
     'difficultySchemaVersion': difficultySchemaVersion,
     'difficultySettingsSnapshot': difficultySettingsSnapshot?.toJson(),
@@ -380,6 +389,17 @@ class ScheduleMonth {
   };
   ScheduleMonth clone() => ScheduleMonth.fromJson(toJson());
   factory ScheduleMonth.fromJson(Map<String, dynamic> j) => ScheduleMonth(
+    dutyPositions: j['dutyPositions'] == null
+        ? null
+        : (j['dutyPositions'] as List)
+              .map(
+                (p) =>
+                    DutyPositions.fromJson(Map<String, dynamic>.from(p as Map)),
+              )
+              .toList(),
+    v13Diagnostics: j['v13Diagnostics'] == null
+        ? null
+        : Map<String, dynamic>.from(j['v13Diagnostics'] as Map),
     year: j['year'] as int,
     month: j['month'] as int,
     people: [

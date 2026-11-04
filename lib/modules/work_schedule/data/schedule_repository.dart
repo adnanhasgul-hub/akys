@@ -1,3 +1,6 @@
+import '../domain/duty_positions.dart';
+import '../engine/v13/constraint_validator.dart';
+
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -235,6 +238,38 @@ class FirestoreScheduleRepository implements ScheduleRepository {
     final next = month.clone()
       ..revision = month.revision + 1
       ..updatedAt = DateTime.now().toUtc().toIso8601String();
+    if (next.dutyPositions != null) {
+      if (!next.boundaryConfirmed) {
+        throw const ScheduleConflict(
+          'V1.3 için önceki ay sınırı doğrulanmalıdır.',
+        );
+      }
+      final errors = const ConstraintValidator().validate(
+        next,
+        next.dutyPositions!,
+      );
+      if (errors.isNotEmpty) {
+        throw ScheduleConflict(errors.map((e) => e.message).join('\n'));
+      }
+      final expected = {
+        for (final p in next.dutyPositions!)
+          int.parse(p.date.substring(8)): [
+            p.seniorDutyPersonId!,
+            ...p.juniorDutyPersonIds,
+          ],
+      };
+      if (canonical(expected.map((k, v) => MapEntry('$k', v))) !=
+          canonical(next.duties.map((k, v) => MapEntry('$k', v)))) {
+        throw const ScheduleConflict(
+          'Pozisyonlar ile nöbet listesi uyuşmuyor. V1.3 düzenleyicisini kullanın.',
+        );
+      }
+      if (!next.editable) {
+        throw const ScheduleConflict(
+          'V1.3 geliştirme çizelgesi yalnız taslak kaydedilebilir.',
+        );
+      }
+    }
     return db.runTransaction((tx) async {
       final ref = months.doc(next.id);
       final old = await tx.get(ref);
@@ -257,6 +292,34 @@ class FirestoreScheduleRepository implements ScheduleRepository {
       }
       if (old.exists) {
         final prior = ScheduleMonth.fromJson(old.data()!);
+        if (prior.dutyPositions != null && next.dutyPositions == null) {
+          throw const ScheduleConflict('V1.3 pozisyonları sessizce silinemez.');
+        }
+        if (prior.dutyPositions != null &&
+            canonical(prior.dutyPositions!.map((p) => p.toJson()).toList()) !=
+                canonical(
+                  next.dutyPositions!.map((p) => p.toJson()).toList(),
+                )) {
+          next.v13Diagnostics = {
+            'status': 'MANUALLY_EDITED',
+            'optimalityProven': false,
+            'hierarchyProven': false,
+          };
+        }
+        if (prior.dutyPositions != null &&
+            (canonical(
+                      prior.constraints.map((k, v) => MapEntry(k, v.toJson())),
+                    ) !=
+                    canonical(
+                      next.constraints.map((k, v) => MapEntry(k, v.toJson())),
+                    ) ||
+                canonical(prior.boundary) != canonical(next.boundary))) {
+          next.v13Diagnostics = {
+            'status': 'INPUT_CHANGED',
+            'optimalityProven': false,
+            'hierarchyProven': false,
+          };
+        }
         if (prior.revision != month.revision) {
           throw const ScheduleConflict(
             'Bu ay başka bir oturumda değişti. Kaydetmeden yeniden yükleyin.',
@@ -327,6 +390,24 @@ class FirestoreScheduleRepository implements ScheduleRepository {
           }
         }
       }
+      if (next.dutyPositions != null &&
+          next.v13Diagnostics?['optimalityProven'] != true) {
+        next.dutyPositions = next.dutyPositions!
+            .map(
+              (r) => r.juniorDutyPersonIds.isNotEmpty
+                  ? r
+                  : DutyPositions(
+                      date: r.date,
+                      seniorDutyPersonId: r.seniorDutyPersonId,
+                      juniorDutyPersonIds: r.juniorDutyPersonIds,
+                      seniorRoleIsSubstitution: r.seniorRoleIsSubstitution,
+                      seniorRoleOriginalGroup: r.seniorRoleOriginalGroup,
+                      juniorVacancyReason:
+                          'NOT_PROVEN: Günün boşluğu yeniden doğrulanmalıdır.',
+                    ),
+            )
+            .toList();
+      }
       if (!next.editable && validateDuties(next).isNotEmpty) {
         throw const ScheduleConflict(
           'Kesinleştirmeden önce nöbet hatalarını düzeltin.',
@@ -341,6 +422,11 @@ class FirestoreScheduleRepository implements ScheduleRepository {
   /// snapshot. Rank/name/activeAtCreation stay frozen; a draft is required.
   @override
   Future<ScheduleMonth> refreshMonthDutyGroups(ScheduleMonth month) async {
+    if (month.dutyPositions != null) {
+      throw const ScheduleConflict(
+        'V1.3 pozisyonları varken grup snapshot güncellemesi kapalı.',
+      );
+    }
     return db.runTransaction((tx) async {
       final stored = await tx.get(months.doc(month.id));
       final registry = await tx.get(root);
@@ -409,6 +495,9 @@ class FirestoreScheduleRepository implements ScheduleRepository {
       final m = ScheduleMonth.fromJson(snap.data()!);
       if (m.revision != month.revision) {
         throw const ScheduleConflict('Ay değişti. Yeniden yükleyin.');
+      }
+      if (m.dutyPositions != null) {
+        throw const ScheduleConflict('V1.3 geliştirme çizelgesi yayımlanamaz.');
       }
       if (m.status != MonthStatus.finalised &&
           m.status != MonthStatus.published) {

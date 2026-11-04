@@ -15,6 +15,8 @@ class SolverResult {
     required this.positions,
     required this.visitedStates,
     required this.elapsedMilliseconds,
+    this.firstFeasibleMilliseconds,
+    this.proofMilliseconds,
     this.optimalityProven = false,
     this.infeasibilityProven = false,
     this.realSeniorInfeasibilityProven = false,
@@ -22,6 +24,7 @@ class SolverResult {
     this.message = '',
     this.vacancies = const {},
   });
+  final int? firstFeasibleMilliseconds, proofMilliseconds;
   final SolverStatus status;
   String get statusCode => switch (status) {
     SolverStatus.feasible => 'FEASIBLE',

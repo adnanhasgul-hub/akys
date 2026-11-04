@@ -280,6 +280,11 @@ class ScheduleController extends ChangeNotifier {
     if (current == null || !current.editable) {
       throw const ScheduleConflict('Önce taslak ay seçin.');
     }
+    if (current.dutyPositions != null) {
+      throw const ScheduleConflict(
+        'V1.3 ayını V1.3 önizleme panelinden yeniden oluşturun.',
+      );
+    }
     if (!current.boundaryConfirmed) {
       throw const ScheduleConflict(
         'Önce önceki ay sınır nöbetlerini doğrulayın.',

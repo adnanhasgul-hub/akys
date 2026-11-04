@@ -1,3 +1,5 @@
+import 'v13_solver_panel.dart';
+
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -654,6 +656,11 @@ class _SchedulePageState extends State<SchedulePage> {
       padding: const EdgeInsets.all(16),
       children: [
         _monthHeading(m),
+        V13SolverPanel(
+          key: ValueKey('v13-${m.id}-${m.revision}'),
+          month: m,
+          onSave: (next) => c.save(next),
+        ),
         if (m.difficultySchemaVersion == 0)
           const Padding(
             padding: EdgeInsets.only(bottom: 12),

@@ -11,11 +11,18 @@ class FeasibilitySolver {
   Future<SolverResult> solve(
     ScheduleMonth input, {
     SolverCancellation? cancellation,
+    void Function(
+      int visitedStates,
+      int elapsedMilliseconds,
+      int? firstFeasibleMilliseconds,
+    )?
+    onProgress,
     List<num> Function(List<DutyPositions>)? lexicographicObjective,
   }) async {
     final watch = Stopwatch()..start();
     var nodes = 0, limited = false, seniorProof = false, optimum = false;
     List<DutyPositions> best = [];
+    int? firstFeasible;
     var bestCoverage = -1;
     List<num>? bestObjective;
     bool improves(List<num> a, List<num> b) {
@@ -37,6 +44,8 @@ class FeasibilitySolver {
       positions: List.unmodifiable(best),
       visitedStates: nodes,
       elapsedMilliseconds: watch.elapsedMilliseconds,
+      firstFeasibleMilliseconds: firstFeasible,
+      proofMilliseconds: optimum ? watch.elapsedMilliseconds : null,
       optimalityProven: optimum,
       infeasibilityProven: impossible,
       realSeniorInfeasibilityProven: seniorProof,
@@ -91,7 +100,11 @@ class FeasibilitySolver {
         );
       }
 
-      List<DutyPositions> options(int day, bool substitutions) {
+      List<DutyPositions> options(
+        int day,
+        bool substitutions, {
+        bool optionalThirds = true,
+      }) {
         final date = dateKey(m.date(day));
         final must = people
             .where(
@@ -122,7 +135,7 @@ class FeasibilitySolver {
           // Third person only when a must obligation requires it, never default.
           for (var a = 0; a < js.length; a++) {
             for (var b = a + 1; b < js.length; b++) {
-              if (lexicographicObjective != null ||
+              if ((lexicographicObjective != null && optionalThirds) ||
                   (must.contains(js[a].personId) &&
                       must.contains(js[b].personId))) {
                 choices.add([js[a].personId, js[b].personId]);
@@ -222,6 +235,7 @@ class FeasibilitySolver {
         }
         nodes++;
         if (nodes % yieldEvery == 0) {
+          onProgress?.call(nodes, watch.elapsedMilliseconds, firstFeasible);
           await Future<void>.delayed(Duration.zero);
         }
         if (cancellation?.cancelled ?? false) {
@@ -239,6 +253,7 @@ class FeasibilitySolver {
               filledWitness.add(d);
             }
           }
+          firstFeasible ??= watch.elapsedMilliseconds;
           final coverage = candidate
               .where((r) => r.juniorDutyPersonIds.isNotEmpty)
               .length;
@@ -261,7 +276,7 @@ class FeasibilitySolver {
           if (rows.containsKey(day)) {
             continue;
           }
-          var opts = options(day, substitutions);
+          var opts = options(day, substitutions, optionalThirds: !firstOnly);
           if (day == forceDay) {
             opts = opts.where((r) => r.juniorDutyPersonIds.isNotEmpty).toList();
           }
