@@ -77,7 +77,16 @@ void main() {
       await tester.tap(find.text('Nöbet').first);
       await tester.pumpAndSettle();
       expect(find.text('Tutamaz / Tutacak'), findsOneWidget);
-      await tester.drag(find.byType(ListView).first, const Offset(0, -400));
+      await tester.scrollUntilVisible(
+        find.text('1 · Pazar'),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(ListView).first,
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       await tester.pumpAndSettle();
       expect(find.text('1 · Pazar'), findsOneWidget);
       expect(tester.takeException(), isNull);

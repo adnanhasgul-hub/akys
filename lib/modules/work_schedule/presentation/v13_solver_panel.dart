@@ -1,3 +1,7 @@
+import '../../../core/design/akys_design_system.dart';
+import 'compact_duty_card.dart';
+import 'solver_status_summary.dart';
+
 import 'package:flutter/material.dart';
 
 import '../domain/models.dart';
@@ -243,15 +247,6 @@ class _V13SolverPanelState extends State<V13SolverPanel> {
   @override
   Widget build(BuildContext context) {
     if (!widget.enabled) return const SizedBox.shrink();
-    String name(String? id) {
-      for (final p in widget.month.people) {
-        if (p.personId == id) {
-          return p.displayName;
-        }
-      }
-      return 'Personel bulunamadı';
-    }
-
     final issues = preview == null
         ? <ConstraintIssue>[]
         : const ConstraintValidator().validate(widget.month, preview!);
@@ -274,15 +269,13 @@ class _V13SolverPanelState extends State<V13SolverPanel> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'V1.3 deneysel nöbet motoru',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            const AkysSectionHeader(title: 'V1.3 deneysel nöbet motoru'),
             if (widget.month.dutyPositions == null)
               const Text(
                 'Eski ayda pozisyon bilgisi yok; mevcut kayıt tahminle dönüştürülmez. Yeni arama ayrı önizleme üretir.',
               ),
             DropdownButton<int>(
+              isExpanded: true,
               value: budget,
               items: [
                 for (final n in [500, 2000, 10000])
@@ -311,20 +304,15 @@ class _V13SolverPanelState extends State<V13SolverPanel> {
             ),
             if (running) const LinearProgressIndicator(),
             if (error != null) Text(error!),
+            SolverStatusSummary(
+              valid: preview == null ? null : issues.isEmpty,
+              hierarchyProven: hierarchyProven,
+              optimal: optimal,
+              searchLimited:
+                  result?.solver.status == SolverStatus.searchLimitReached,
+              finished: result != null && !running,
+            ),
             if (preview != null) ...[
-              Text(
-                'Hard constraint: ${issues.isEmpty ? 'GEÇERLİ' : 'GEÇERSİZ'}',
-              ),
-              Text(
-                'Kıdem hiyerarşisi: ${hierarchyProven ? 'kanıtlandı' : 'kanıtlanmadı; istisna kesin kabul edilmez'}',
-              ),
-              Text(
-                'Genel optimizasyon: ${optimal ? 'tamamlandı' : 'tamamlanmadı; geçici taslak'}',
-              ),
-              if (result?.solver.status == SolverStatus.searchLimitReached)
-                const Text(
-                  'Arama sınırına ulaşıldı. Bu, imkânsızlık anlamına gelmez; geçerli önizleme korunur.',
-                ),
               for (final e in issues)
                 Text('${e.code} ${e.date ?? ''}: ${e.message}'),
               if (report != null)
@@ -348,19 +336,20 @@ class _V13SolverPanelState extends State<V13SolverPanel> {
                 title: const Text('Günlük senior / junior pozisyonları'),
                 children: [
                   for (var i = 0; i < preview!.length; i++)
-                    ListTile(
-                      title: Text(
-                        '${preview![i].date} · Senior: ${name(preview![i].seniorDutyPersonId)}${preview![i].seniorRoleIsSubstitution ? ' (geçici)' : ''}',
-                      ),
-                      subtitle: Text(
-                        'Junior: ${preview![i].juniorDutyPersonIds.map(name).join(', ')}\n${preview![i].juniorVacancyReason ?? ''}',
-                      ),
-                      trailing: IconButton(
-                        onPressed: running || saving || !widget.month.editable
-                            ? null
-                            : () => edit(i),
-                        icon: const Icon(Icons.edit),
-                      ),
+                    CompactDutyCard(
+                      key: ValueKey('preview-${preview![i].date}'),
+                      month: widget.month,
+                      day: int.parse(preview![i].date.substring(8)),
+                      position: preview![i],
+                      positionsKnown: true,
+                      errors: [
+                        for (final e in issues)
+                          if (e.date == preview![i].date || e.date == null)
+                            e.message,
+                      ],
+                      onEdit: running || saving || !widget.month.editable
+                          ? null
+                          : () => edit(i),
                     ),
                 ],
               ),

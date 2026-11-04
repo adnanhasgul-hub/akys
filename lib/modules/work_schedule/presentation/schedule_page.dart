@@ -1,3 +1,6 @@
+import '../../../core/design/akys_design_system.dart';
+import '../engine/v13/constraint_validator.dart';
+import 'compact_duty_card.dart';
 import 'v13_solver_panel.dart';
 
 import 'dart:math';
@@ -143,29 +146,24 @@ class _SchedulePageState extends State<SchedulePage> {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 SizedBox(
-                  width: 220,
-                  child: DropdownButtonFormField<String>(
-                    key: ValueKey('${c.selectedId}-${c.months.length}'),
-                    initialValue: c.months.any((m) => m.id == c.selectedId)
-                        ? c.selectedId
-                        : null,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Çalışılan ay',
-                      isDense: true,
-                    ),
-                    items: [
+                  width: MediaQuery.sizeOf(context).width < 400
+                      ? MediaQuery.sizeOf(context).width - 32
+                      : 300,
+                  child: AkysMonthSelector(
+                    options: [
                       for (final m in c.months)
-                        DropdownMenuItem(
-                          value: m.id,
-                          child: Text('${m.title} · ${statusLabel(m.status)}'),
+                        AkysMonthOption(
+                          id: m.id,
+                          title: m.title,
+                          statusLabel: statusLabel(m.status),
+                          status: m.editable
+                              ? AkysStatus.info
+                              : AkysStatus.success,
                         ),
                     ],
-                    onChanged: c.busy
-                        ? null
-                        : (id) {
-                            if (id != null) c.select(id);
-                          },
+                    selectedId: c.selectedId,
+                    loading: c.loading,
+                    onChanged: c.busy ? null : c.select,
                   ),
                 ),
                 FilledButton.icon(
@@ -183,7 +181,9 @@ class _SchedulePageState extends State<SchedulePage> {
           ),
           Expanded(
             child: c.loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(
+                    child: AkysLoadingState(label: 'Çizelge yükleniyor'),
+                  )
                 : switch (section) {
                     0 => _overview(),
                     1 => _duty(),
@@ -201,56 +201,59 @@ class _SchedulePageState extends State<SchedulePage> {
           ),
         ],
       );
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Çalışma Çizelgesi'),
-          actions: [?widget.logout],
-        ),
-        body: SafeArea(
-          child: wide
-              ? Row(
-                  children: [
-                    NavigationRail(
-                      extended: true,
-                      selectedIndex: section,
-                      onDestinationSelected: c.busy
-                          ? null
-                          : (i) => setState(() => section = i),
-                      destinations: [
-                        for (var i = 0; i < sections.length; i++)
-                          NavigationRailDestination(
-                            icon: Icon(icons[i]),
-                            label: Text(sections[i]),
-                          ),
-                      ],
-                    ),
-                    const VerticalDivider(width: 1),
-                    Expanded(child: body),
-                  ],
-                )
-              : body,
-        ),
-        bottomNavigationBar: wide
-            ? null
-            : SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (var i = 0; i < sections.length; i++)
-                      Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: ChoiceChip(
-                          avatar: Icon(icons[i], size: 18),
-                          label: Text(sections[i]),
-                          selected: i == section,
-                          onSelected: c.busy
-                              ? null
-                              : (_) => setState(() => section = i),
-                        ),
+      return Theme(
+        data: section <= 1 ? ClinicalTealTheme.light : Theme.of(context),
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Çalışma Çizelgesi'),
+            actions: [?widget.logout],
+          ),
+          body: SafeArea(
+            child: wide
+                ? Row(
+                    children: [
+                      NavigationRail(
+                        extended: true,
+                        selectedIndex: section,
+                        onDestinationSelected: c.busy
+                            ? null
+                            : (i) => setState(() => section = i),
+                        destinations: [
+                          for (var i = 0; i < sections.length; i++)
+                            NavigationRailDestination(
+                              icon: Icon(icons[i]),
+                              label: Text(sections[i]),
+                            ),
+                        ],
                       ),
-                  ],
+                      const VerticalDivider(width: 1),
+                      Expanded(child: body),
+                    ],
+                  )
+                : body,
+          ),
+          bottomNavigationBar: wide
+              ? null
+              : SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (var i = 0; i < sections.length; i++)
+                        Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: ChoiceChip(
+                            avatar: Icon(icons[i], size: 18),
+                            label: Text(sections[i]),
+                            selected: i == section,
+                            onSelected: c.busy
+                                ? null
+                                : (_) => setState(() => section = i),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
+        ),
       );
     },
   );
@@ -286,78 +289,99 @@ class _SchedulePageState extends State<SchedulePage> {
       child: Text(text, textAlign: TextAlign.center),
     ),
   );
-  Widget _overview() => ListView(
-    padding: const EdgeInsets.all(20),
-    children: [
-      Text(
-        'Güvenli, dengeli ve izlenebilir planlama',
-        style: Theme.of(context).textTheme.headlineSmall,
-      ),
-      const SizedBox(height: 12),
-      Wrap(
-        spacing: 16,
-        runSpacing: 12,
-        children: [
-          _metric(
-            'Aktif personel',
-            '${c.personnel.where((p) => p.active).length}',
-            Icons.groups,
-          ),
-          _metric('Kayıtlı ay', '${c.months.length}', Icons.calendar_month),
-          _metric(
-            'Kesin / Paylaşılan',
-            '${c.months.where((m) => m.status == MonthStatus.finalised || m.status == MonthStatus.published).length}',
-            Icons.verified_outlined,
-          ),
-        ],
-      ),
-      const SizedBox(height: 24),
-      const Text(
-        '1. Personeli ve kıdem sırasını kontrol edin.\n2. Ay oluşturun; personel snapshot’ı sabitlenir.\n3. Tutamaz / Tutacak ve önceki ay nöbetlerini kaydedin.\n4. Ön kontrol ve oluşturma sonrası çizelgeyi inceleyin.\n5. Görevleri seçin, kesinleştirin; Excel ve güvenli paylaşımı kullanın.',
-      ),
-      const SizedBox(height: 24),
-      if (c.month != null) ...[
-        Text(
-          '${c.month!.title} · ${statusLabel(c.month!.status)}',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        Text(
-          '${c.month!.people.length} snapshot personeli · ${c.month!.requiredDuties} aylık nöbet · Motor ${c.month!.engineVersion}',
+  List<String> _hardWarnings(ScheduleMonth m) => m.dutyPositions != null
+      ? const ConstraintValidator()
+            .validate(m, m.dutyPositions!)
+            .map((e) => e.message)
+            .toList()
+      : m.duties.isEmpty
+      ? []
+      : validateDuties(m);
+  Widget _overview() {
+    final m = c.month;
+    final warnings = m == null
+        ? 0
+        : _hardWarnings(m).length +
+              (m.dutyPositions == null
+                  ? [
+                      for (var d = 1; d <= m.days; d++)
+                        if (compositionWarning(m, d) != null) d,
+                    ].length
+                  : 0);
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const AkysSectionHeader(
+          title: 'Genel Bakış',
+          description: 'Seçili ayın planlama durumu',
         ),
         const SizedBox(height: 12),
-        FilledButton(
-          onPressed: () => setState(() => section = 1),
-          child: const Text('Nöbet çizelgesini aç'),
-        ),
-      ],
-    ],
-  );
-  Widget _metric(String label, String value, IconData icon) => SizedBox(
-    width: 230,
-    child: Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
+        AkysResponsiveTiles(
           children: [
-            Icon(icon, color: AkysColors.brand),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    value,
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  Text(label),
-                ],
+            AkysStatCard(
+              compact: true,
+              label: 'Aktif personel',
+              value: '${c.personnel.where((p) => p.active).length}',
+              icon: Icons.groups_outlined,
+            ),
+            AkysStatCard(
+              compact: true,
+              label: 'Kayıtlı ay',
+              value: '${c.months.length}',
+              icon: Icons.calendar_month,
+            ),
+            AkysStatCard(
+              compact: true,
+              label: 'Kesin / Paylaşılan',
+              value:
+                  '${c.months.where((m) => m.status == MonthStatus.finalised || m.status == MonthStatus.published).length}',
+              icon: Icons.verified_outlined,
+            ),
+            AkysStatCard(
+              compact: true,
+              label: 'Seçili ay',
+              value: m == null ? 'Seçilmedi' : statusLabel(m.status),
+              icon: Icons.event_note,
+            ),
+            if (m != null)
+              AkysStatCard(
+                compact: true,
+                label: 'Çizelge uyarıları',
+                value: '$warnings',
+                icon: Icons.info_outline,
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (m == null)
+          const AkysEmptyState(
+            title: 'Ay seçilmedi',
+            message: 'Nöbet Hazırla ile yeni ay oluşturun veya kayıtlı bir ay seçin.',
+          )
+        else ...[
+          Text(m.title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          AkysPrimaryButton(
+            label: 'Nöbet çizelgesini aç',
+            onPressed: () => setState(() => section = 1),
+          ),
+        ],
+        const SizedBox(height: 16),
+        const ExpansionTile(
+          title: Text('Planlama yardımı'),
+          children: [
+            Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                '1. Personeli ve kıdem sırasını kontrol edin.\n2. Ay oluşturun; personel snapshot’ı sabitlenir.\n3. Tutamaz / Tutacak ve önceki ay nöbetlerini kaydedin.\n4. Ön kontrol ve oluşturma sonrası çizelgeyi inceleyin.\n5. Görevleri seçin. V1.3 yalnız geliştirme taslağıdır; kesinleştirme ve paylaşım kapalıdır.',
               ),
             ),
           ],
         ),
-      ),
-    ),
-  );
+      ],
+    );
+  }
+
   Widget _personnel() => Column(
     children: [
       Padding(
@@ -650,7 +674,12 @@ class _SchedulePageState extends State<SchedulePage> {
   Widget _duty() {
     final m = c.month;
     if (m == null) {
-      return empty('Nöbet Hazırla ile ay oluşturun veya kayıtlı bir ay seçin.');
+      return const SingleChildScrollView(
+        child: AkysEmptyState(
+          title: 'Nöbet ayı seçilmedi',
+          message: 'Nöbet Hazırla ile ay oluşturun veya kayıtlı bir ay seçin.',
+        ),
+      );
     }
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -1069,109 +1098,91 @@ class _SchedulePageState extends State<SchedulePage> {
     );
   }
 
-  Widget _calendar(ScheduleMonth m) => LayoutBuilder(
-    builder: (context, constraints) {
-      final columns = constraints.maxWidth >= 900
-          ? 7
-          : constraints.maxWidth >= 550
-          ? 4
-          : 1;
-      return GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: columns,
-          mainAxisExtent: columns == 1 ? 174 : 235,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-        ),
-        itemCount: m.days,
-        itemBuilder: (context, index) {
-          final d = index + 1;
-          return DragTarget<_DutyDrag>(
-            onWillAcceptWithDetails: (details) =>
-                m.editable && !c.busy && details.data.day != d,
-            onAcceptWithDetails: (details) =>
-                _moveDialog(m, details.data.day, details.data.id, to: d),
-            builder: (context, candidates, rejected) => Card(
-              color: AkysColors.weekdays[m.date(d).weekday - 1],
-              shape: RoundedRectangleBorder(
-                side: BorderSide(
-                  color: candidates.isNotEmpty
-                      ? AkysColors.brand
-                      : Theme.of(context).dividerColor,
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$d · ${dayNames[m.date(d).weekday - 1]}',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      'Zorluk: ${m.difficultyScore(d)}${m.isHoliday(d)
-                          ? ' · ${m.difficulty.holiday(m.date(d))!.name}'
-                          : m.difficulty.isPreHoliday(m.date(d))
-                          ? ' · Tatil öncesi'
-                          : ''}',
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                    if (compositionWarning(m, d) != null)
-                      Tooltip(
-                        message: compositionWarning(m, d)!,
-                        child: const Text(
-                          '⚠ Kıdemli + Çömez eşleşmesi yok',
-                          style: TextStyle(fontSize: 11),
-                        ),
-                      ),
-                    if (m.manuallyEdited.contains(d))
+  Widget _calendar(ScheduleMonth m) {
+    final roleIssues = m.dutyPositions == null
+        ? null
+        : const ConstraintValidator().validate(m, m.dutyPositions!);
+    final legacyErrors = m.dutyPositions == null
+        ? _hardWarnings(m)
+        : <String>[];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (legacyErrors.isNotEmpty)
+          ExpansionTile(
+            title: AkysStatusChip(
+              label: '${legacyErrors.length} zorunlu kural hatası',
+              status: AkysStatus.error,
+            ),
+            children: [for (final e in legacyErrors) Text(e)],
+          ),
+        AkysResponsiveTiles(
+          minimumWidth: 280,
+          maxColumns: 3,
+          children: [
+            for (var d = 1; d <= m.days; d++)
+              DragTarget<_DutyDrag>(
+                onWillAcceptWithDetails: (details) =>
+                    m.dutyPositions == null &&
+                    m.editable &&
+                    !c.busy &&
+                    details.data.day != d,
+                onAcceptWithDetails: (details) =>
+                    _moveDialog(m, details.data.day, details.data.id, to: d),
+                builder: (context, candidates, rejected) => CompactDutyCard(
+                  month: m,
+                  day: d,
+                  position: m.dutyPositions
+                      ?.where((r) => r.date == dateKey(m.date(d)))
+                      .firstOrNull,
+                  positionsKnown: m.dutyPositions != null,
+                  errors: [
+                    for (final e in roleIssues ?? [])
+                      if (e.date == dateKey(m.date(d)) || e.date == null)
+                        e.message,
+                  ],
+                  warnings: [
+                    if (m.dutyPositions == null &&
+                        compositionWarning(m, d) != null)
+                      compositionWarning(m, d)!,
+                    if (m.manuallyEdited.contains(d)) 'Manuel düzenlendi',
+                  ],
+                  actions: [
+                    if (m.dutyPositions != null && m.editable)
                       const Text(
-                        '✎ Manuel düzenlendi',
-                        style: TextStyle(fontSize: 11),
+                        'Pozisyon düzenleme için V1.3 önizleme panelini kullanın.',
                       ),
-                    const SizedBox(height: 6),
-                    Expanded(
-                      child: ListView(
-                        children: [
-                          for (final id in m.duties[d] ?? <String>[])
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 3),
-                              child: m.editable
-                                  ? LongPressDraggable<_DutyDrag>(
-                                      data: _DutyDrag(d, id),
-                                      feedback: Material(
-                                        elevation: 4,
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(8),
-                                          child: Text(m.person(id).displayName),
-                                        ),
-                                      ),
-                                      child: InkWell(
-                                        onTap: c.busy
-                                            ? null
-                                            : () => _moveDialog(m, d, id),
-                                        child: personChip(m.person(id)),
-                                      ),
-                                    )
-                                  : personChip(m.person(id)),
-                            ),
-                        ],
-                      ),
-                    ),
+                    if (m.dutyPositions == null)
+                      for (final id in m.duties[d] ?? <String>[])
+                        m.editable
+                            ? LongPressDraggable<_DutyDrag>(
+                                data: _DutyDrag(d, id),
+                                feedback: Material(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(8),
+                                    child: Text(m.person(id).displayName),
+                                  ),
+                                ),
+                                child: TextButton.icon(
+                                  onPressed: c.busy
+                                      ? null
+                                      : () => _moveDialog(m, d, id),
+                                  icon: const Icon(Icons.edit),
+                                  label: Text(
+                                    '${m.person(id).displayName} · Taşı / Değiştir',
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
                   ],
                 ),
               ),
-            ),
-          );
-        },
-      );
-    },
-  );
+          ],
+        ),
+      ],
+    );
+  }
+
   Future<void> _moveDialog(
     ScheduleMonth m,
     int from,

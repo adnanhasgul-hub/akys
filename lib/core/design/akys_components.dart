@@ -80,8 +80,10 @@ class AkysCard extends StatelessWidget {
     required this.child,
     this.onTap,
     this.semanticLabel,
+    this.padding = const EdgeInsets.all(AkysTokens.spaceLg),
     super.key,
   });
+  final EdgeInsetsGeometry padding;
   final Widget child;
   final VoidCallback? onTap;
   final String? semanticLabel;
@@ -89,20 +91,14 @@ class AkysCard extends StatelessWidget {
   Widget build(BuildContext context) => Card(
     clipBehavior: Clip.antiAlias,
     child: onTap == null
-        ? Padding(
-            padding: const EdgeInsets.all(AkysTokens.spaceLg),
-            child: child,
-          )
+        ? Padding(padding: padding, child: child)
         : Semantics(
             button: true,
             label: semanticLabel,
             child: InkWell(
               onTap: onTap,
               borderRadius: BorderRadius.circular(AkysTokens.radiusMd),
-              child: Padding(
-                padding: const EdgeInsets.all(AkysTokens.spaceLg),
-                child: child,
-              ),
+              child: Padding(padding: padding, child: child),
             ),
           ),
   );
@@ -114,13 +110,16 @@ class AkysStatCard extends StatelessWidget {
     required this.value,
     required this.icon,
     this.description,
+    this.compact = false,
     super.key,
   });
+  final bool compact;
   final String label, value;
   final IconData icon;
   final String? description;
   @override
   Widget build(BuildContext context) => AkysCard(
+    padding: EdgeInsets.all(compact ? 12 : AkysTokens.spaceLg),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
