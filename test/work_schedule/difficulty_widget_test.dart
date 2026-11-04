@@ -152,11 +152,16 @@ void main() {
         150,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Puanlama Ayarlarını Kaydet'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Puanlama Ayarlarını Kaydet'));
       await tester.pumpAndSettle();
       expect(saved!.weekdayScores.first, 10);
       final read = await tester.runAsync(() => repo.loadDifficultySettings());
       expect(read!.weekdayScores.first, 10);
+      await tester.ensureVisible(find.text('Varsayılanları Geri Yükle'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Varsayılanları Geri Yükle'));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(

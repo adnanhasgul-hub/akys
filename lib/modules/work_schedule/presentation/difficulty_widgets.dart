@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/design/akys_design_system.dart';
+
 import '../domain/models.dart';
 import '../domain/difficulty.dart';
 import '../data/calendar/turkey_holidays.dart';
@@ -88,6 +90,8 @@ class DifficultySettingsPanel extends StatefulWidget {
 }
 
 class _DifficultySettingsPanelState extends State<DifficultySettingsPanel> {
+  String? feedback;
+  bool saveFailed = false;
   late List<int> days;
   late int pre;
   late List<HolidayDay> custom;
@@ -100,11 +104,12 @@ class _DifficultySettingsPanelState extends State<DifficultySettingsPanel> {
   }
 
   Widget score(String label, int value, ValueChanged<int> change, String key) =>
-      SizedBox(
-        width: 230,
+      AkysCard(
+        padding: const EdgeInsets.all(12),
         child: DropdownButtonFormField<int>(
           key: ValueKey('$key-$value'),
           initialValue: value,
+          isExpanded: true,
           decoration: InputDecoration(labelText: label),
           items: [
             for (var n = 1; n <= 10; n++)
@@ -117,18 +122,15 @@ class _DifficultySettingsPanelState extends State<DifficultySettingsPanel> {
   Widget build(BuildContext context) => ListView(
     padding: const EdgeInsets.all(20),
     children: [
-      Text(
-        'Nöbet Puanlama Ayarları',
-        style: Theme.of(context).textTheme.headlineSmall,
-      ),
+      const AkysSectionHeader(title: 'Nöbet Puanlama Ayarları'),
       const SizedBox(height: 8),
       const Text(
         'Yalnızca yeni ayları etkiler. Mevcut ayların puan snapshot’ları değişmez. Tüm puanlar 1–10 arası tam sayıdır.',
       ),
       const SizedBox(height: 20),
-      Wrap(
-        spacing: 16,
-        runSpacing: 16,
+      AkysResponsiveTiles(
+        minimumWidth: 230,
+        maxColumns: 3,
         children: [
           for (var i = 0; i < 7; i++)
             score(dayNames[i], days[i], (n) => days[i] = n, 'weekday-${i + 1}'),
@@ -147,16 +149,35 @@ class _DifficultySettingsPanelState extends State<DifficultySettingsPanel> {
           FilledButton.icon(
             onPressed: widget.busy
                 ? null
-                : () => widget.onSave(
-                    DifficultySettings(
-                      weekdayScores: days,
-                      preHolidayDifficultyScore: pre,
-                      revision: widget.settings.revision,
-                      customHolidays: custom,
-                    ),
-                  ),
+                : () async {
+                    final ok = await widget.onSave(
+                      DifficultySettings(
+                        weekdayScores: days,
+                        preHolidayDifficultyScore: pre,
+                        revision: widget.settings.revision,
+                        customHolidays: custom,
+                      ),
+                    );
+                    if (mounted) {
+                      setState(() {
+                        saveFailed = !ok;
+                        feedback = ok ? 'Puanlama ayarları kaydedildi.' : 'Ayarlar kaydedilemedi. Değişikliklerinizi kontrol edip yeniden deneyin.';
+                      });
+                    }
+                  },
             icon: const Icon(Icons.save_outlined),
             label: const Text('Puanlama Ayarlarını Kaydet'),
+          ),
+          TextButton(
+            onPressed: widget.busy
+                ? null
+                : () => setState(() {
+                    days = [...widget.settings.weekdayScores];
+                    pre = widget.settings.preHolidayDifficultyScore;
+                    custom = [...widget.settings.customHolidays];
+                    feedback = null;
+                  }),
+            child: const Text('Değişikliklerden Vazgeç'),
           ),
           OutlinedButton(
             onPressed: widget.busy
@@ -170,6 +191,11 @@ class _DifficultySettingsPanelState extends State<DifficultySettingsPanel> {
           ),
         ],
       ),
+      if (feedback != null)
+        AkysStatusChip(
+          label: feedback!,
+          status: saveFailed ? AkysStatus.error : AkysStatus.success,
+        ),
       const SizedBox(height: 28),
       Text(
         'Türkiye Resmî Tatil Takvimi',

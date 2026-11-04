@@ -33,9 +33,17 @@ Future<void> openPeople(
   await tester.tap(find.text('Personel').first);
   await tester.pumpAndSettle();
   await tester.scrollUntilVisible(
-    find.byKey(const ValueKey('duty-group-initial-resident-6')),
+    find.byKey(const ValueKey('person-details-initial-resident-6')),
     200,
     scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(
+    find.byKey(const ValueKey('person-details-initial-resident-6')),
+  );
+  await tester.pumpAndSettle();
+  await tester.ensureVisible(
+    find.byKey(const ValueKey('duty-group-initial-resident-6')),
   );
   await tester.pumpAndSettle();
 }
