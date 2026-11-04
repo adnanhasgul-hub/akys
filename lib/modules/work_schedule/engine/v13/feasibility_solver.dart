@@ -11,11 +11,22 @@ class FeasibilitySolver {
   Future<SolverResult> solve(
     ScheduleMonth input, {
     SolverCancellation? cancellation,
+    List<num> Function(List<DutyPositions>)? lexicographicObjective,
   }) async {
     final watch = Stopwatch()..start();
     var nodes = 0, limited = false, seniorProof = false, optimum = false;
     List<DutyPositions> best = [];
     var bestCoverage = -1;
+    List<num>? bestObjective;
+    bool improves(List<num> a, List<num> b) {
+      for (var i = 0; i < a.length; i++) {
+        if (a[i] != b[i]) {
+          return a[i] < b[i];
+        }
+      }
+      return false;
+    }
+
     final vacancies = <String, VacancyProof>{};
     SolverResult result(
       SolverStatus status, {
@@ -111,8 +122,9 @@ class FeasibilitySolver {
           // Third person only when a must obligation requires it, never default.
           for (var a = 0; a < js.length; a++) {
             for (var b = a + 1; b < js.length; b++) {
-              if (must.contains(js[a].personId) &&
-                  must.contains(js[b].personId)) {
+              if (lexicographicObjective != null ||
+                  (must.contains(js[a].personId) &&
+                      must.contains(js[b].personId))) {
                 choices.add([js[a].personId, js[b].personId]);
               }
             }
@@ -230,7 +242,11 @@ class FeasibilitySolver {
           final coverage = candidate
               .where((r) => r.juniorDutyPersonIds.isNotEmpty)
               .length;
-          if (coverage > bestCoverage) {
+          final score = lexicographicObjective?.call(candidate);
+          if (score != null
+              ? (bestObjective == null || improves(score, bestObjective!))
+              : coverage > bestCoverage) {
+            bestObjective = score;
             best = candidate;
             bestCoverage = coverage;
           }
@@ -260,7 +276,9 @@ class FeasibilitySolver {
             domain = opts;
           }
         }
-        if (!firstOnly && possibleCoverage <= bestCoverage) {
+        if (lexicographicObjective == null &&
+            !firstOnly &&
+            possibleCoverage <= bestCoverage) {
           return false;
         }
         var found = false;
@@ -301,6 +319,13 @@ class FeasibilitySolver {
         if (best.isEmpty) {
           return result(SolverStatus.infeasible, impossible: true);
         }
+      }
+      if (lexicographicObjective != null) {
+        await search(seniorProof);
+        optimum = !limited;
+        return result(
+          limited ? SolverStatus.searchLimitReached : SolverStatus.feasible,
+        );
       }
       // An admissible capacity bound proves the maximum number of covered days.
       final upperBound = (juniors.length * 8).clamp(0, m.days);
