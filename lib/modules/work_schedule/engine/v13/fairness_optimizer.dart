@@ -2,6 +2,7 @@ import '../../domain/models.dart';
 import '../../domain/duty_positions.dart';
 import 'feasibility_solver.dart';
 import 'solver_result.dart';
+import 'incumbent_repair.dart';
 
 class PersonFairness {
   PersonFairness(this.person);
@@ -91,6 +92,19 @@ class FairnessReport {
       return v.isEmpty ? 0 : v.last - v.first;
     }
 
+    // Squared prefix deviation from a uniform monthly vacancy distribution.
+    // Integer arithmetic keeps the comparison deterministic; it is below all
+    // capacity, hierarchy, senior solo and group duty-count objectives.
+    var prefix = 0, temporalSpread = 0;
+    final soloDates = positions
+        .where((r) => r.juniorDutyPersonIds.isEmpty)
+        .map((r) => r.date)
+        .toSet();
+    for (var day = 1; day <= month.days; day++) {
+      if (soloDates.contains(dateKey(month.date(day)))) prefix++;
+      final deviation = prefix * month.days - vacancies * day;
+      temporalSpread += deviation * deviation;
+    }
     stages = {
       'seniorSubstitutions': [substitutions],
       'juniorVacancies': [vacancies],
@@ -104,6 +118,7 @@ class FairnessReport {
       'groupDutyCounts': groupValues(
         (g) => [spread(g.map((p) => p.total)), ...g.map((p) => p.total)],
       ),
+      'soloCalendarSpread': [temporalSpread],
       'saturday': groupValues(
         (g) => [
           spread(g.map((p) => p.categories[3])),
@@ -192,6 +207,13 @@ class FairnessOptimizer {
           cancellation: cancellation,
           onProgress: onProgress,
           lexicographicObjective: (rows) => FairnessReport(m, rows).objective,
+          improveIncumbent: (rows, checkpoint) => repairIncumbent(
+            m,
+            rows,
+            (r) => FairnessReport(m, r).objective,
+            checkpoint,
+            nodeLimit ~/ 2,
+          ),
         );
     return FairnessResult(
       result,
