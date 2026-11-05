@@ -57,7 +57,7 @@ jobs:
         run: flutter test
 
       - name: Build Flutter Web
-        run: flutter build web --release
+        run: flutter build web --release --dart-define=AKYS_V13_SOLVER=true
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
