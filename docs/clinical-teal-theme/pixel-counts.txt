@@ -1,0 +1,20 @@
+1440-Ayarlar.png {'primary': 16780, 'heading': 6190, 'background': 1110663, 'selected': 0, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+1440-Birleşik Görünüm.png {'primary': 12150, 'heading': 5065, 'background': 694171, 'selected': 0, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+1440-Geçmiş Aylar.png {'primary': 6503, 'heading': 1585, 'background': 1307794, 'selected': 0, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+1440-Görevler.png {'primary': 13507, 'heading': 6131, 'background': 764080, 'selected': 0, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+1440-Nöbet.png {'primary': 26630, 'heading': 6648, 'background': 819925, 'selected': 0, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+1440-Personel.png {'primary': 12834, 'heading': 2516, 'background': 561564, 'selected': 0, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+1440-dialog.png {'primary': 4036, 'heading': 701, 'background': 0, 'selected': 0, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+1440-home.png {'primary': 693, 'heading': 3115, 'background': 1160450, 'selected': 3828, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+1440-login.png {'primary': 27430, 'heading': 774, 'background': 1244816, 'selected': 0, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+1440-overview.png {'primary': 7123, 'heading': 3423, 'background': 1267925, 'selected': 12861, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+414-Ayarlar.png {'primary': 6525, 'heading': 2251, 'background': 167594, 'selected': 4941, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+414-Birleşik Görünüm.png {'primary': 12055, 'heading': 3107, 'background': 168540, 'selected': 4941, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+414-Geçmiş Aylar.png {'primary': 6527, 'heading': 1367, 'background': 329878, 'selected': 4941, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+414-Görevler.png {'primary': 12901, 'heading': 3159, 'background': 169739, 'selected': 0, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+414-Nöbet.png {'primary': 26571, 'heading': 3668, 'background': 246188, 'selected': 0, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+414-Personel.png {'primary': 12841, 'heading': 1988, 'background': 143993, 'selected': 0, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+414-dialog.png {'primary': 3988, 'heading': 701, 'background': 0, 'selected': 0, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+414-home.png {'primary': 693, 'heading': 3127, 'background': 210752, 'selected': 3828, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+414-login.png {'primary': 22102, 'heading': 774, 'background': 251672, 'selected': 0, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}
+414-overview.png {'primary': 6991, 'heading': 3271, 'background': 275014, 'selected': 4651, 'warning': 0, 'oldPrimary': 0, 'oldBackground': 0}

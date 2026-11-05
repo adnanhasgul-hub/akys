@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../design/clinical_teal_theme.dart';
+
 import 'auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -51,13 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFE8F3EF), Color(0xFFF7F9F8)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
+        decoration: const BoxDecoration(color: AkysTokens.background),
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(

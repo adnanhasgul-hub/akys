@@ -219,34 +219,31 @@ class _SchedulePageState extends State<SchedulePage> {
           ],
         ),
       );
-      return Theme(
-        data: ClinicalTealTheme.light,
-        child: Scaffold(
-          appBar: AppBar(
-            title: const Text('Çalışma Çizelgesi'),
-            actions: [?widget.logout],
-          ),
-          body: SafeArea(
-            child: AkysAdaptiveNavigation(
-              destinations: [
-                for (final i in [0, 1, 2, 3, 5, 4, 6])
-                  AkysDestination(
-                    label: i == 2 ? 'Görevler' : sections[i],
-                    icon: icons[i],
-                  ),
-              ],
-              selectedIndex: [0, 1, 2, 3, 5, 4, 6].indexOf(section),
-              enabled: !c.busy,
-              onSelected: (i) {
-                if (!c.busy) setState(() => section = [0, 1, 2, 3, 5, 4, 6][i]);
-              },
-              body: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: AkysTokens.maxContent,
-                  ),
-                  child: body,
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Çalışma Çizelgesi'),
+          actions: [?widget.logout],
+        ),
+        body: SafeArea(
+          child: AkysAdaptiveNavigation(
+            destinations: [
+              for (final i in [0, 1, 2, 3, 5, 4, 6])
+                AkysDestination(
+                  label: i == 2 ? 'Görevler' : sections[i],
+                  icon: icons[i],
                 ),
+            ],
+            selectedIndex: [0, 1, 2, 3, 5, 4, 6].indexOf(section),
+            enabled: !c.busy,
+            onSelected: (i) {
+              if (!c.busy) setState(() => section = [0, 1, 2, 3, 5, 4, 6][i]);
+            },
+            body: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: AkysTokens.maxContent,
+                ),
+                child: body,
               ),
             ),
           ),

@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../design/clinical_teal_theme.dart';
+
 import '../../modules/work_schedule/domain/models.dart';
 
 abstract final class AkysColors {
-  static const brand = Color(0xFF176B65), background = Color(0xFFF8FAFC);
-  static const forbidden = Color(0xFFDC2626),
-      fixed = Color(0xFF16A34A),
-      warning = Color(0xFFF59E0B);
+  // Compatibility aliases: one shared theme, separate personnel palettes.
+  static const brand = AkysTokens.primary, background = AkysTokens.background;
+  static const forbidden = AkysTokens.error,
+      fixed = AkysTokens.success,
+      warning = AkysTokens.warning;
   static const ranks = [
     Color(0xFF1E3A8A),
     Color(0xFF2563EB),
@@ -18,13 +21,13 @@ abstract final class AkysColors {
   ];
   static Color rank(int rank) => ranks[(rank - 1).clamp(0, 6)];
   static const weekdays = [
-    Color(0xFFF8FAFC),
-    Color(0xFFF8FAFC),
-    Color(0xFFF8FAFC),
-    Color(0xFFF3E8FF),
-    Color(0xFFEFF6FF),
-    Color(0xFFFFF1F2),
-    Color(0xFFFEE2E2),
+    AkysTokens.surface,
+    AkysTokens.surface,
+    AkysTokens.surface,
+    AkysTokens.surface,
+    AkysTokens.surface,
+    AkysTokens.background,
+    AkysTokens.background,
   ];
   static const taskColors = [
     Color(0xFF2563EB),
@@ -34,17 +37,5 @@ abstract final class AkysColors {
     Color(0xFFD97706),
   ];
   static Color task(ClinicTask task) => taskColors[task.index];
-  static ThemeData get theme => ThemeData(
-    colorScheme: ColorScheme.fromSeed(seedColor: brand),
-    scaffoldBackgroundColor: background,
-    useMaterial3: true,
-    inputDecorationTheme: const InputDecorationTheme(
-      border: OutlineInputBorder(),
-    ),
-    cardTheme: const CardThemeData(
-      elevation: 0,
-      margin: EdgeInsets.symmetric(vertical: 6),
-    ),
-    appBarTheme: const AppBarTheme(centerTitle: false),
-  );
+  static ThemeData get theme => ClinicalTealTheme.light;
 }
