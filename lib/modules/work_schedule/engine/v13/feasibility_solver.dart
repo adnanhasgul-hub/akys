@@ -18,6 +18,11 @@ class FeasibilitySolver {
     )?
     onProgress,
     List<num> Function(List<DutyPositions>)? lexicographicObjective,
+    Future<List<DutyPositions>> Function(
+      List<DutyPositions>,
+      Future<bool> Function(),
+    )?
+    improveIncumbent,
   }) async {
     final watch = Stopwatch()..start();
     var nodes = 0, limited = false, seniorProof = false, optimum = false;
@@ -336,6 +341,42 @@ class FeasibilitySolver {
         }
       }
       if (lexicographicObjective != null) {
+        if (improveIncumbent != null) {
+          final repaired = await improveIncumbent(
+            List.unmodifiable(best),
+            () async {
+              if (nodes >= nodeLimit || (cancellation?.cancelled ?? false)) {
+                limited = true;
+                return false;
+              }
+              nodes++;
+              if (nodes % yieldEvery == 0) {
+                onProgress?.call(
+                  nodes,
+                  watch.elapsedMilliseconds,
+                  firstFeasible,
+                );
+                await Future<void>.delayed(Duration.zero);
+              }
+              if (cancellation?.cancelled ?? false) {
+                limited = true;
+                return false;
+              }
+              return true;
+            },
+          );
+          if (const ConstraintValidator().validate(m, repaired).isNotEmpty) {
+            throw StateError('Onarım zorunlu kısıtları ihlal etti.');
+          }
+          final value = lexicographicObjective(repaired);
+          if (improves(value, bestObjective!)) {
+            best = repaired;
+            bestObjective = value;
+            bestCoverage = best
+                .where((r) => r.juniorDutyPersonIds.isNotEmpty)
+                .length;
+          }
+        }
         await search(seniorProof);
         optimum = !limited;
         return result(
