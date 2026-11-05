@@ -128,78 +128,96 @@ class _SchedulePageState extends State<SchedulePage> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: c,
     builder: (context, _) {
-      final wide = MediaQuery.sizeOf(context).width >= 1000;
-      final body = Column(
-        children: [
-          if (c.busy) const LinearProgressIndicator(),
-          if (c.error != null) _message(c.error!, true),
-          if (c.notice != null) _message(c.notice!, false),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text(
-                  sections[section],
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                SizedBox(
-                  width: MediaQuery.sizeOf(context).width < 400
-                      ? MediaQuery.sizeOf(context).width - 32
-                      : 300,
-                  child: AkysMonthSelector(
-                    options: [
-                      for (final m in c.months)
-                        AkysMonthOption(
-                          id: m.id,
-                          title: m.title,
-                          statusLabel: statusLabel(m.status),
-                          status: m.editable
-                              ? AkysStatus.info
-                              : AkysStatus.success,
-                        ),
-                    ],
-                    selectedId: c.selectedId,
-                    loading: c.loading,
-                    onChanged: c.busy ? null : c.select,
-                  ),
-                ),
-                FilledButton.icon(
-                  onPressed: c.busy ? null : _createMonth,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Nöbet Hazırla'),
-                ),
-                IconButton(
-                  onPressed: c.busy ? null : c.initialize,
-                  tooltip: 'Yeniden yükle',
-                  icon: const Icon(Icons.refresh),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: c.loading
-                ? const Center(
-                    child: AkysLoadingState(label: 'Çizelge yükleniyor'),
-                  )
-                : switch (section) {
-                    0 => _overview(),
-                    1 => _duty(),
-                    2 => _tasks(),
-                    3 => _personnel(),
-                    4 => _history(),
-                    5 => _combined(),
-                    _ => DifficultySettingsPanel(
-                      key: ValueKey(c.difficultySettings.revision),
-                      settings: c.difficultySettings,
-                      busy: c.busy,
-                      onSave: c.saveDifficulty,
+      final body = LayoutBuilder(
+        builder: (context, bounds) => Column(
+          children: [
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: bounds.maxHeight * .55),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    if (c.busy) const LinearProgressIndicator(),
+                    if (c.error != null) _message(c.error!, true),
+                    if (c.notice != null) _message(c.notice!, false),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Wrap(
+                        spacing: 12,
+                        runSpacing: 10,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            sections[section],
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          SizedBox(
+                            width: MediaQuery.sizeOf(context).width < 400
+                                ? MediaQuery.sizeOf(context).width - 32
+                                : 300,
+                            child: AkysMonthSelector(
+                              options: [
+                                for (final m in c.months)
+                                  AkysMonthOption(
+                                    id: m.id,
+                                    title: m.title,
+                                    statusLabel: statusLabel(m.status),
+                                    status: m.editable
+                                        ? AkysStatus.info
+                                        : AkysStatus.success,
+                                  ),
+                              ],
+                              selectedId: c.selectedId,
+                              loading: c.loading,
+                              onChanged: c.busy ? null : c.select,
+                            ),
+                          ),
+                          FilledButton.icon(
+                            onPressed: c.busy ? null : _createMonth,
+                            icon: const Icon(Icons.add),
+                            label: const Text('Nöbet Hazırla'),
+                          ),
+                          IconButton(
+                            onPressed: c.busy ? null : c.initialize,
+                            tooltip: 'Yeniden yükle',
+                            icon: const Icon(Icons.refresh),
+                          ),
+                        ],
+                      ),
                     ),
-                  },
-          ),
-        ],
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: c.loading
+                  ? const Center(
+                      child: SingleChildScrollView(
+                        child: AkysLoadingState(label: 'Çizelge yükleniyor'),
+                      ),
+                    )
+                  : PrimaryScrollController.none(
+                      child: IndexedStack(
+                        key: const ValueKey('schedule-pages'),
+                        index: section,
+                        children: [
+                          _overview(),
+                          _duty(),
+                          _tasks(),
+                          _personnel(),
+                          _history(),
+                          _combined(),
+                          DifficultySettingsPanel(
+                            key: ValueKey(c.difficultySettings.revision),
+                            settings: c.difficultySettings,
+                            busy: c.busy,
+                            onSave: c.saveDifficulty,
+                          ),
+                        ],
+                      ),
+                    ),
+            ),
+          ],
+        ),
       );
       return Theme(
         data: ClinicalTealTheme.light,
@@ -209,59 +227,29 @@ class _SchedulePageState extends State<SchedulePage> {
             actions: [?widget.logout],
           ),
           body: SafeArea(
-            child: wide
-                ? Row(
-                    children: [
-                      NavigationRail(
-                        extended: true,
-                        selectedIndex: section,
-                        onDestinationSelected: c.busy
-                            ? null
-                            : (i) => setState(() => section = i),
-                        destinations: [
-                          for (var i = 0; i < sections.length; i++)
-                            NavigationRailDestination(
-                              icon: Icon(icons[i]),
-                              label: Text(sections[i]),
-                            ),
-                        ],
-                      ),
-                      const VerticalDivider(width: 1),
-                      Expanded(
-                        child: Center(
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(
-                              maxWidth: AkysTokens.maxContent,
-                            ),
-                            child: body,
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                : body,
-          ),
-          bottomNavigationBar: wide
-              ? null
-              : SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      for (var i = 0; i < sections.length; i++)
-                        Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: ChoiceChip(
-                            avatar: Icon(icons[i], size: 18),
-                            label: Text(sections[i]),
-                            selected: i == section,
-                            onSelected: c.busy
-                                ? null
-                                : (_) => setState(() => section = i),
-                          ),
-                        ),
-                    ],
+            child: AkysAdaptiveNavigation(
+              destinations: [
+                for (final i in [0, 1, 2, 3, 5, 4, 6])
+                  AkysDestination(
+                    label: i == 2 ? 'Görevler' : sections[i],
+                    icon: icons[i],
                   ),
+              ],
+              selectedIndex: [0, 1, 2, 3, 5, 4, 6].indexOf(section),
+              enabled: !c.busy,
+              onSelected: (i) {
+                if (!c.busy) setState(() => section = [0, 1, 2, 3, 5, 4, 6][i]);
+              },
+              body: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: AkysTokens.maxContent,
+                  ),
+                  child: body,
                 ),
+              ),
+            ),
+          ),
         ),
       );
     },
@@ -293,9 +281,8 @@ class _SchedulePageState extends State<SchedulePage> {
     ),
   );
   Widget empty(String text) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(24),
-      child: Text(text, textAlign: TextAlign.center),
+    child: SingleChildScrollView(
+      child: AkysEmptyState(title: 'Henüz içerik yok', message: text),
     ),
   );
   List<String> _hardWarnings(ScheduleMonth m) => m.dutyPositions != null
@@ -700,21 +687,25 @@ class _SchedulePageState extends State<SchedulePage> {
   Widget _history() => c.months.isEmpty
       ? empty('Henüz ay yok. Nöbet Hazırla ile başlayın.')
       : ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AkysTokens.spaceMd),
           children: [
             for (final m in c.months)
-              Card(
-                child: ListTile(
-                  leading: const Icon(Icons.calendar_month),
-                  title: Text(m.title),
-                  subtitle: Text(
-                    '${statusLabel(m.status)} · ${m.people.length} personel · revizyon ${m.revision}',
+              Padding(
+                padding: const EdgeInsets.only(bottom: AkysTokens.spaceSm),
+                child: AkysCard(
+                  padding: EdgeInsets.zero,
+                  child: ListTile(
+                    leading: const Icon(Icons.calendar_month),
+                    title: Text(m.title),
+                    subtitle: Text(
+                      '${statusLabel(m.status)} · ${m.people.length} personel · revizyon ${m.revision}',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      c.select(m.id);
+                      setState(() => section = 1);
+                    },
                   ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    c.select(m.id);
-                    setState(() => section = 1);
-                  },
                 ),
               ),
           ],

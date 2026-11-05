@@ -1,3 +1,5 @@
+import '../design/navigation_helper.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
@@ -35,7 +37,7 @@ Future<void> openPeople(
   await tester.scrollUntilVisible(
     find.byKey(const ValueKey('person-details-initial-resident-6')),
     200,
-    scrollable: find.byType(Scrollable).first,
+    scrollable: activeScheduleScroll(),
   );
   await tester.pumpAndSettle();
   await tester.tap(

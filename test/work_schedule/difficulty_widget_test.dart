@@ -1,3 +1,5 @@
+import '../design/navigation_helper.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
@@ -141,7 +143,7 @@ void main() {
       await tester.scrollUntilVisible(
         field,
         100,
-        scrollable: find.byType(Scrollable).first,
+        scrollable: activeScheduleScroll(),
       );
       await tester.tap(field);
       await tester.pumpAndSettle();
@@ -150,7 +152,7 @@ void main() {
       await tester.scrollUntilVisible(
         find.text('Puanlama Ayarlarını Kaydet'),
         150,
-        scrollable: find.byType(Scrollable).first,
+        scrollable: activeScheduleScroll(),
       );
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Puanlama Ayarlarını Kaydet'));
@@ -167,7 +169,7 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('weekday-1-3')),
         -150,
-        scrollable: find.byType(Scrollable).first,
+        scrollable: activeScheduleScroll(),
       );
       expect(find.byKey(const ValueKey('weekday-1-3')), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -206,7 +208,7 @@ void main() {
       final repo = FirestoreScheduleRepository(FakeFirebaseFirestore());
       await tester.pumpWidget(host(SchedulePage(repository: repo)));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Ayarlar'));
+      await navigateSchedule(tester, 'Ayarlar');
       await tester.pumpAndSettle();
       expect(find.text('Nöbet Puanlama Ayarları'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('weekday-1-3')));

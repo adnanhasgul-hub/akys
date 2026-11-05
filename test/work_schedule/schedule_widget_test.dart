@@ -1,3 +1,5 @@
+import '../design/navigation_helper.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
@@ -49,7 +51,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('Dr. Yeni'),
       200,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: activeScheduleScroll(),
     );
     await tester.pumpAndSettle();
     expect(find.text('Dr. Yeni'), findsOneWidget);
@@ -76,13 +78,19 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Nöbet').first);
       await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Tutamaz / Tutacak'),
+        100,
+        scrollable: activeScheduleScroll(),
+      );
+      await tester.pumpAndSettle();
       expect(find.text('Tutamaz / Tutacak'), findsOneWidget);
       await tester.scrollUntilVisible(
         find.text('1 · Pazar'),
         200,
         scrollable: find
             .descendant(
-              of: find.byType(ListView).first,
+              of: find.byType(ListView).last,
               matching: find.byType(Scrollable),
             )
             .first,
@@ -90,8 +98,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('1 · Pazar'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      await tester.ensureVisible(find.text('Görev Dağılımı').last);
-      await tester.tap(find.text('Görev Dağılımı').last);
+
+      await navigateSchedule(tester, 'Görev Dağılımı');
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Poliklinik'),
+        100,
+        scrollable: activeScheduleScroll(),
+      );
       await tester.pumpAndSettle();
       expect(find.text('Asıl / Yedek Seç'), findsWidgets);
       expect(tester.takeException(), isNull);

@@ -1,3 +1,5 @@
+import 'navigation_helper.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
@@ -43,15 +45,14 @@ void main() {
         'Birleşik Görünüm',
         'Ayarlar',
       ]) {
-        await t.ensureVisible(find.text(section).first);
-        await t.tap(find.text(section).first);
+        await navigateSchedule(t, section);
         await t.pumpAndSettle();
         expect(t.takeException(), isNull, reason: section);
         if (section == 'Personel') {
           await t.scrollUntilVisible(
             find.byKey(const ValueKey('person-details-initial-resident-1')),
             150,
-            scrollable: find.byType(Scrollable).first,
+            scrollable: activeScheduleScroll(),
           );
           await t.pumpAndSettle();
           await t.tap(
@@ -87,7 +88,7 @@ void main() {
       await t.scrollUntilVisible(
         find.text('Görevi düzenle').first,
         150,
-        scrollable: find.byType(Scrollable).first,
+        scrollable: activeScheduleScroll(),
       );
       await t.pumpAndSettle();
       await t.tap(find.text('Görevi düzenle').first);
@@ -144,7 +145,7 @@ void main() {
     await t.scrollUntilVisible(
       find.text('Değişikliklerden Vazgeç'),
       180,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: activeScheduleScroll(),
     );
     await t.pumpAndSettle();
     await t.tap(find.text('Değişikliklerden Vazgeç'));
@@ -157,7 +158,7 @@ void main() {
     await t.scrollUntilVisible(
       find.textContaining('Ayarlar kaydedilemedi.'),
       100,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: activeScheduleScroll(),
     );
     expect(find.textContaining('Ayarlar kaydedilemedi.'), findsOneWidget);
     expect(t.takeException(), isNull);
@@ -206,7 +207,7 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.text('2026 Kasım · Taslak').last);
     await t.pumpAndSettle();
-    await t.tap(find.text('Görev Dağılımı').first);
+    await navigateSchedule(t, 'Görev Dağılımı');
     await t.pumpAndSettle();
     await t.tap(find.text('Asıl / Yedek Seç').first);
     await t.pumpAndSettle();
@@ -231,7 +232,7 @@ void main() {
     final saved = await t.runAsync(() => repo.loadMonth('2026-11'));
     expect(saved!.tasks[ClinicTask.outpatient]!.primary, 'p1');
     expect(saved.tasks[ClinicTask.outpatient]!.backup, 'p2');
-    await t.tap(find.text('Birleşik Görünüm').first);
+    await navigateSchedule(t, 'Birleşik Görünüm');
     await t.pumpAndSettle();
     await t.tap(find.text('1 · Pazar'));
     await t.pumpAndSettle();

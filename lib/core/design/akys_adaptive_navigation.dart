@@ -16,6 +16,7 @@ class AkysAdaptiveNavigation extends StatelessWidget {
     required this.selectedIndex,
     required this.onSelected,
     required this.body,
+    this.enabled = true,
     super.key,
   }) : assert(destinations.length > 0),
        assert(selectedIndex >= 0 && selectedIndex < destinations.length);
@@ -23,6 +24,7 @@ class AkysAdaptiveNavigation extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
   final Widget body;
+  final bool enabled;
   Future<void> more(BuildContext context) async {
     final index = await showModalBottomSheet<int>(
       context: context,
@@ -58,18 +60,20 @@ class AkysAdaptiveNavigation extends StatelessWidget {
             SizedBox(
               width: constraints.maxWidth >= AkysTokens.desktop ? 260 : 220,
               child: FocusTraversalGroup(
-                child: ListView(
+                child: SingleChildScrollView(
                   padding: const EdgeInsets.all(8),
-                  children: [
-                    for (var i = 0; i < destinations.length; i++)
-                      ListTile(
-                        selected: i == selectedIndex,
-                        selectedTileColor: AkysTokens.selected,
-                        leading: Icon(destinations[i].icon),
-                        title: Text(destinations[i].label),
-                        onTap: () => onSelected(i),
-                      ),
-                  ],
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < destinations.length; i++)
+                        ListTile(
+                          selected: i == selectedIndex,
+                          selectedTileColor: AkysTokens.selected,
+                          leading: Icon(destinations[i].icon),
+                          title: Text(destinations[i].label),
+                          onTap: enabled ? () => onSelected(i) : null,
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -133,7 +137,7 @@ class AkysAdaptiveNavigation extends StatelessWidget {
         foregroundColor: AkysTokens.navy,
         shape: const RoundedRectangleBorder(),
       ),
-      onPressed: tap,
+      onPressed: enabled ? tap : null,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

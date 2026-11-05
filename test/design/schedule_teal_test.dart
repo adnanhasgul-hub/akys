@@ -1,3 +1,5 @@
+import 'navigation_helper.dart';
+
 import 'package:akys/modules/work_schedule/presentation/v13_solver_panel.dart';
 
 import '../work_schedule/v13_integration_test.dart' show positioned;
@@ -54,6 +56,12 @@ void main() {
         await repo.saveMonth(m, create: true);
         await tester.pumpWidget(host(SchedulePage(repository: repo)));
         await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text('Aktif personel'),
+          100,
+          scrollable: activeScheduleScroll(),
+        );
+        await tester.pumpAndSettle();
         expect(find.text('Aktif personel'), findsOneWidget);
         await tester.tap(find.byType(DropdownButtonFormField<String>).first);
         await tester.pumpAndSettle();
@@ -64,7 +72,7 @@ void main() {
           200,
           scrollable: find
               .descendant(
-                of: find.byType(ListView).first,
+                of: find.byType(ListView).last,
                 matching: find.byType(Scrollable),
               )
               .first,
@@ -77,7 +85,7 @@ void main() {
           200,
           scrollable: find
               .descendant(
-                of: find.byType(ListView).first,
+                of: find.byType(ListView).last,
                 matching: find.byType(Scrollable),
               )
               .first,
