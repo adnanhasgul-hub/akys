@@ -5,14 +5,17 @@ class ValidationResult {
     List<String> errors,
     List<int>? quality, {
     this.substitutionCount = 0,
+    this.candidateOnly = false,
   }) : errors = List.unmodifiable(errors),
        quality = quality == null ? null : List.unmodifiable(quality);
   final List<String> errors;
   final List<int>? quality;
   final int substitutionCount;
+  final bool candidateOnly;
 
   /// Substitution evidence is process-local and never an authorization to persist.
-  bool get permanentApprovalAllowed => isValid && substitutionCount == 0;
+  bool get permanentApprovalAllowed =>
+      isValid && substitutionCount == 0 && !candidateOnly;
   bool get isValid => errors.isEmpty;
 }
 
@@ -23,6 +26,34 @@ class SolutionValidator {
     Problem problem,
     Solution solution, {
     TransitionSession? localEvidence,
+  }) => _validate(problem, solution, localEvidence: localEvidence);
+
+  /// Checks a candidate only in a genuine active phase B; never grants approval.
+  ValidationResult validatePhaseBCandidate(
+    Problem problem,
+    Solution solution, {
+    required TransitionSession session,
+  }) {
+    if (!session.permitsPhaseBCandidate(problem)) {
+      return ValidationResult(
+        ['Etkin B aşaması veya snapshot doğrulanamadı.'],
+        null,
+        candidateOnly: true,
+      );
+    }
+    return _validate(
+      problem,
+      solution,
+      localEvidence: session,
+      candidateOnly: true,
+    );
+  }
+
+  ValidationResult _validate(
+    Problem problem,
+    Solution solution, {
+    TransitionSession? localEvidence,
+    bool candidateOnly = false,
   }) {
     var substitutions = 0;
     final errors = <String>[], days = problem.slotDays;
@@ -54,7 +85,9 @@ class SolutionValidator {
       if (role == DutyRole.senior && doctor.group != DutyGroup.senior) {
         substitutions++;
         if (localEvidence == null ||
-            !localEvidence.verifiesLocalTransition(problem, solution)) {
+            (candidateOnly
+                ? !localEvidence.permitsPhaseBCandidate(problem)
+                : !localEvidence.verifiesLocalTransition(problem, solution))) {
           errors.add('${doctor.id}: kanıtlanmamış kıdemsiz geçişi yasak.');
         }
       }
@@ -93,7 +126,12 @@ class SolutionValidator {
       }
     }
     if (errors.isNotEmpty) {
-      return ValidationResult(errors, null, substitutionCount: substitutions);
+      return ValidationResult(
+        errors,
+        null,
+        substitutionCount: substitutions,
+        candidateOnly: candidateOnly,
+      );
     }
     final sorted = [...counts]..sort();
     final quality = [
@@ -108,6 +146,11 @@ class SolutionValidator {
         ).any((same) => !same)) {
       errors.add('Bildirilen kalite vektörü hesaplanan değerle eşleşmiyor.');
     }
-    return ValidationResult(errors, quality, substitutionCount: substitutions);
+    return ValidationResult(
+      errors,
+      quality,
+      substitutionCount: substitutions,
+      candidateOnly: candidateOnly,
+    );
   }
 }

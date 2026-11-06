@@ -3,11 +3,23 @@ import 'solution_validator.dart';
 
 /// Normalized exact rational; no floating-point comparisons.
 final class Exact implements Comparable<Exact> {
-  Exact(BigInt n, BigInt d)
-    : assert(d > BigInt.zero),
-      numerator = n ~/ n.gcd(d),
-      denominator = d ~/ n.gcd(d);
+  factory Exact(BigInt n, BigInt d) {
+    if (d <= BigInt.zero) throw ArgumentError('Denominator must be positive');
+    final divisor = n.gcd(d);
+    return Exact._(n ~/ divisor, d ~/ divisor);
+  }
+  const Exact._(this.numerator, this.denominator);
   factory Exact.integer(int n) => Exact(BigInt.from(n), BigInt.one);
+  Map<String, String> toMessage() => {
+    'numerator': numerator.toString(),
+    'denominator': denominator.toString(),
+  };
+  factory Exact.fromMessage(Map<String, dynamic> data) {
+    final n = BigInt.parse(data['numerator'] as String),
+        d = BigInt.parse(data['denominator'] as String);
+    if (d <= BigInt.zero) throw FormatException('Denominator must be positive');
+    return Exact(n, d);
+  }
   final BigInt numerator, denominator;
   Exact operator +(Exact o) => Exact(
     numerator * o.denominator + o.numerator * denominator,
@@ -38,6 +50,21 @@ final class ClinicalQuality implements Comparable<ClinicalQuality> {
 
   /// Every component is minimized, including negated maximization objectives.
   final List<Exact> components;
+  Map<String, Object> toMessage() => {
+    'type': 'clinicalQuality',
+    'components': components.map((c) => c.toMessage()).toList(),
+  };
+  factory ClinicalQuality.fromMessage(Map<String, dynamic> data) {
+    if (data['type'] != 'clinicalQuality' ||
+        data['components'] is! List ||
+        (data['components'] as List).length != 19) {
+      throw FormatException('Invalid clinical quality');
+    }
+    return ClinicalQuality([
+      for (final raw in data['components'] as List)
+        Exact.fromMessage(Map<String, dynamic>.from(raw as Map)),
+    ]);
+  }
   @override
   int compareTo(ClinicalQuality other) {
     if (components.length != other.components.length) {
@@ -59,6 +86,33 @@ class ClinicalQualityEvaluator {
     Solution solution, {
     TransitionSession? localEvidence,
   }) {
+    final validation = const SolutionValidator().validate(
+      problem,
+      solution,
+      localEvidence: localEvidence,
+    );
+    return _calculate(problem, solution, validation);
+  }
+
+  /// Returns provisional quality only; the active session is a proof capability.
+  ClinicalQuality evaluatePhaseBCandidate(
+    Problem problem,
+    Solution solution, {
+    required TransitionSession session,
+  }) {
+    final validation = const SolutionValidator().validatePhaseBCandidate(
+      problem,
+      solution,
+      session: session,
+    );
+    return _calculate(problem, solution, validation);
+  }
+
+  ClinicalQuality _calculate(
+    Problem problem,
+    Solution solution,
+    ValidationResult validation,
+  ) {
     if (problem.startDate == null ||
         problem.slotRoles == null ||
         problem.dayDifficulties == null) {
@@ -71,11 +125,6 @@ class ClinicalQualityEvaluator {
     )) {
       throw ArgumentError('Senior K1–K4 level required');
     }
-    final validation = const SolutionValidator().validate(
-      problem,
-      solution,
-      localEvidence: localEvidence,
-    );
     if (!validation.isValid) {
       throw ArgumentError('Invalid solution: ${validation.errors.join('; ')}');
     }

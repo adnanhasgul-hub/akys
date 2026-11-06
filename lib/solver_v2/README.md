@@ -229,3 +229,36 @@ two optional): baseline 51 nodes / 821 µs, pruning 51 nodes / 204 µs, both
 optimal with `[0, 3]`. Times are noisy and ordering/JIT-dependent; objective
 pruning is disabled here, so no general performance benefit is implied. These
 small results do not demonstrate clinical-scale performance.
+
+## Stage 1.4C.2A: phase-B candidate evaluation boundary
+
+The prototype objective and `ClinicalQuality` are different types.
+`Solution.prototypeQuality` wraps the existing integer vector; its legacy
+`quality` getter and solution message remain unchanged. `PrototypeQuality` and
+`ClinicalQuality` have distinct type-tagged messages. A clinical message stores
+all 19 rationals as decimal numerator/denominator strings; deserialization
+rejects a different type, wrong component count and non-positive denominators.
+Comparison uses `BigInt` cross multiplication, never floating point.
+
+`SolutionValidator.validate` remains the external incumbent-result check.
+`validatePhaseBCandidate` is a separate candidate-only path: it first requires
+an actual final `TransitionSession` with completed restricted infeasibility,
+an active B search, and the identical `session.problem` snapshot. The session
+owns and privately creates the two search phases; a boolean or serialized claim
+cannot construct that capability. It then applies the same independent hard
+checks and prototype-quality consistency check as the external validator.
+Candidate validation returns `candidateOnly: true` and never allows permanent
+approval, regardless of whether a candidate contains a transition.
+
+`ClinicalQualityEvaluator.evaluatePhaseBCandidate` uses that check and then the
+same independent clinical arithmetic as `evaluate`; an incumbent match is not
+required. Callers can compare its provisional vector with another vector. Ordinary
+`evaluate` still requires incumbent evidence for a transition. No method accepts
+a generic proof-bypass flag, and the active DFS objective/incumbent selection is
+unchanged in this stage. A caller cannot turn candidate quality into a durable
+approval through these APIs. A/B authorization is still process-local, relies on
+the in-process search implementation, is not a portable proof certificate, and
+is not trustworthy against a compromised client. A server verifier is still
+required before persistence of transitional schedules. The next stage must wire
+candidate scoring into the search without exposing unchecked proof bypasses and
+must disable or re-prove the prototype objective bounds.

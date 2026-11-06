@@ -238,13 +238,31 @@ class Problem {
   );
 }
 
+/// Prototype load-balance vector, distinct from 19-component ClinicalQuality.
+final class PrototypeQuality {
+  PrototypeQuality(List<int> values) : values = List.unmodifiable(values);
+  final List<int> values;
+  Map<String, Object> toMessage() => {
+    'type': 'prototypeQuality',
+    'values': values,
+  };
+  factory PrototypeQuality.fromMessage(Map<String, dynamic> data) {
+    if (data['type'] != 'prototypeQuality' || data['values'] is! List) {
+      throw FormatException('Invalid prototype quality');
+    }
+    return PrototypeQuality(List<int>.from(data['values'] as List));
+  }
+}
+
 final class Solution {
   Solution(List<int> assignments, List<int> quality)
     : assignments = List.unmodifiable(assignments),
-      quality = List.unmodifiable(quality);
+      prototypeQuality = PrototypeQuality(quality);
 
   /// Doctor indices in slot order. Quality: load range, then sum of squared loads.
-  final List<int> assignments, quality;
+  final List<int> assignments;
+  final PrototypeQuality prototypeQuality;
+  List<int> get quality => prototypeQuality.values;
   Map<String, Object> toMessage() => {
     'assignments': assignments,
     'quality': quality,
@@ -592,6 +610,15 @@ final class TransitionSession {
 
   /// Process-local check only: not a portable certificate, and never authorizes
   /// durable writes. Bind both the exact snapshot and phase-B assignment.
+  /// Candidate-only capability: requires this genuine live B phase and the
+  /// identical immutable snapshot. It is not a transferable proof.
+  bool permitsPhaseBCandidate(Problem snapshot) =>
+      identical(snapshot, problem) &&
+      _verdict == RestrictedVerdict.provenInfeasible &&
+      _substitution != null &&
+      !_cancelled &&
+      !_phaseBDone;
+
   bool verifiesLocalTransition(Problem snapshot, Solution solution) {
     if (!identical(snapshot, problem) ||
         _verdict != RestrictedVerdict.provenInfeasible ||
