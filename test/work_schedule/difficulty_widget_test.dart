@@ -181,7 +181,9 @@ void main() {
       final repo = FirestoreScheduleRepository(FakeFirebaseFirestore());
       await tester.pumpWidget(host(SchedulePage(repository: repo)));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Nöbet Hazırla'));
+      await tester.tap(find.byTooltip('Ay ve işlemler'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Nöbet Hazırla').last);
       await tester.pumpAndSettle();
       final month = find.byType(DropdownButtonFormField<int>).at(1);
       await tester.tap(month);
@@ -210,7 +212,7 @@ void main() {
       await tester.pumpAndSettle();
       await navigateSchedule(tester, 'Ayarlar');
       await tester.pumpAndSettle();
-      expect(find.text('Nöbet Puanlama Ayarları'), findsOneWidget);
+      expect(find.text('Nöbet Zorluk Puanları (1–10)'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('weekday-1-3')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('8').last);
@@ -222,7 +224,9 @@ void main() {
         () => repo.loadDifficultySettings(),
       );
       expect(settings!.weekdayScores.first, 8);
-      await tester.tap(find.text('Nöbet Hazırla'));
+      await tester.tap(find.byTooltip('Ay ve işlemler'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Nöbet Hazırla').last);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Ayı oluştur'));
       await tester.pumpAndSettle();

@@ -41,6 +41,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('K1'), findsOneWidget);
     expect(find.text(initialNames.first), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Personel Ekle'),
+      150,
+      scrollable: activeScheduleScroll(),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Personel Ekle'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField), 'Dr. Yeni');
@@ -78,6 +84,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Nöbet').first);
       await tester.pumpAndSettle();
+      await expandScheduleSection(tester, 'Planlama araçları');
       await tester.scrollUntilVisible(
         find.text('Tutamaz / Tutacak'),
         100,
@@ -86,8 +93,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Tutamaz / Tutacak'), findsOneWidget);
       await tester.scrollUntilVisible(
-        find.text('1 · Pazar'),
-        200,
+        find.text('01'),
+        -200,
         scrollable: find
             .descendant(
               of: find.byType(ListView).last,
@@ -96,7 +103,7 @@ void main() {
             .first,
       );
       await tester.pumpAndSettle();
-      expect(find.text('1 · Pazar'), findsOneWidget);
+      expect(find.text('01'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       await navigateSchedule(tester, 'Görev Dağılımı');
@@ -107,6 +114,7 @@ void main() {
         scrollable: activeScheduleScroll(),
       );
       await tester.pumpAndSettle();
+      await expandScheduleSection(tester, 'Aylık görev ayarları');
       expect(find.text('Asıl / Yedek Seç'), findsWidgets);
       expect(tester.takeException(), isNull);
     },

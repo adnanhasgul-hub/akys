@@ -31,6 +31,35 @@ class CompactDutyCard extends StatelessWidget {
     return 'Atanmamış / bilinmeyen personel';
   }
 
+  Widget _role(String badge, String text, bool junior) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Semantics(
+        label: junior ? 'Junior pozisyonu' : 'Senior pozisyonu',
+        child: Container(
+          width: 26,
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          decoration: BoxDecoration(
+            color: junior ? AkysTokens.selected : AkysTokens.primary,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            badge,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: junior ? AkysTokens.primary : Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(width: 6),
+      Expanded(
+        child: Text(text, style: const TextStyle(fontSize: 13, height: 1.35)),
+      ),
+    ],
+  );
   @override
   Widget build(BuildContext context) {
     final date = month.date(day),
@@ -46,90 +75,141 @@ class CompactDutyCard extends StatelessWidget {
           ? AkysTokens.background
           : AkysTokens.surface,
       child: ExpansionTile(
+        dense: true,
+        minTileHeight: 64,
         key: PageStorageKey('${key ?? 'saved'}-duty-${month.id}-$day'),
-        tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
         childrenPadding: const EdgeInsets.all(12),
-        title: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$day · ${dayNames[date.weekday - 1]}',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  Text(
-                    dateKey(date),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            if (onEdit != null)
-              IconButton(
+        trailing: onEdit == null
+            ? const Icon(Icons.chevron_right, size: 18)
+            : IconButton(
                 tooltip: 'Pozisyonları düzenle',
                 onPressed: onEdit,
                 icon: const Icon(Icons.edit),
               ),
-          ],
-        ),
-        subtitle: Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (known) ...[
-              Text(
-                'Senior: ${name(position?.seniorDutyPersonId)}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                position == null || position!.juniorDutyPersonIds.isEmpty
-                    ? 'Junior: Boş pozisyon'
-                    : 'Junior: ${position!.juniorDutyPersonIds.map(name).join(', ')}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ] else ...[
-              const Text('Pozisyon bilgisi kayıtlı değil'),
-              Text(
-                'Nöbetçiler: ${ids.map(name).join(', ')}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-            Text('Zorluk: ${month.difficultyScore(day)}'),
-            Wrap(
-              spacing: 4,
-              runSpacing: 4,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                if (holiday != null)
-                  AkysStatusChip(
-                    label:
-                        '${holiday.name}${holiday.isHalfDay ? ' · Yarım gün' : ''}',
-                    status: AkysStatus.info,
+                Container(
+                  width: 42,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  decoration: BoxDecoration(
+                    color: date.weekday == 4
+                        ? AkysTokens.successSurface
+                        : AkysTokens.selected.withValues(alpha: .55),
+                    borderRadius: BorderRadius.circular(9),
                   ),
-                if (position?.seniorRoleIsSubstitution == true)
-                  const AkysStatusChip(
-                    label: 'Geçici senior',
-                    status: AkysStatus.info,
+                  child: Column(
+                    children: [
+                      Text(
+                        day.toString().padLeft(2, '0'),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        const [
+                          'Pzt',
+                          'Sal',
+                          'Çar',
+                          'Per',
+                          'Cum',
+                          'Cmt',
+                          'Paz',
+                        ][date.weekday - 1],
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
                   ),
-                if (errors.isNotEmpty)
-                  AkysStatusChip(
-                    label: '${errors.length} zorunlu kural hatası',
-                    status: AkysStatus.error,
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (known) ...[
+                        _role('K', name(position?.seniorDutyPersonId), false),
+                        const SizedBox(height: 3),
+                        _role(
+                          'Ç',
+                          position == null ||
+                                  position!.juniorDutyPersonIds.isEmpty
+                              ? '— (Boş)'
+                              : position!.juniorDutyPersonIds
+                                    .map(name)
+                                    .join(', '),
+                          true,
+                        ),
+                      ] else ...[
+                        Text(
+                          ids.isEmpty
+                              ? 'Nöbet atanmamış'
+                              : ids.map(name).join('\n'),
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        const Text(
+                          'Pozisyon bilgisi kayıtlı değil',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AkysTokens.muted,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                if (warnings.isNotEmpty)
-                  AkysStatusChip(
-                    label: '${warnings.length} uyarı',
-                    status: AkysStatus.warning,
+                ),
+                const SizedBox(width: 6),
+                Semantics(
+                  label: 'Zorluk: ${month.difficultyScore(day)}',
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AkysTokens.infoSurface,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'Z: ${month.difficultyScore(day)}',
+                      style: const TextStyle(fontSize: 11),
+                    ),
                   ),
+                ),
               ],
             ),
+            if (holiday != null)
+              Text(
+                '${holiday.name}${holiday.isHalfDay ? ' · Yarım gün' : ''}',
+                style: const TextStyle(fontSize: 11),
+              ),
+            if (position?.seniorRoleIsSubstitution == true)
+              const Text(
+                'Geçici senior · kalıcı grup Çömez',
+                style: TextStyle(fontSize: 11, color: AkysTokens.info),
+              ),
+            if (errors.isNotEmpty)
+              Text(
+                '${errors.length} zorunlu kural hatası',
+                style: const TextStyle(fontSize: 11, color: AkysTokens.error),
+              ),
+            if (warnings.isNotEmpty)
+              Text(
+                '${warnings.length} uyarı',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AkysTokens.warningText,
+                ),
+              ),
           ],
         ),
         children: [
+          Text(dateKey(date)),
+          Text('Zorluk: ${month.difficultyScore(day)}'),
           Align(
             alignment: Alignment.centerLeft,
             child: Column(

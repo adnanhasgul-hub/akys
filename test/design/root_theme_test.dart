@@ -74,6 +74,12 @@ void main() {
         expect(t.takeException(), isNull);
       }
       await navigateSchedule(t, 'Personel');
+      await t.scrollUntilVisible(
+        find.text('Personel Ekle'),
+        150,
+        scrollable: activeScheduleScroll(),
+      );
+      await t.pumpAndSettle();
       await t.tap(find.text('Personel Ekle'));
       await t.pumpAndSettle();
       expectClinical(Theme.of(t.element(find.byType(AlertDialog))));

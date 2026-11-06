@@ -142,6 +142,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Nöbet').first);
       await tester.pumpAndSettle();
+      await expandScheduleSection(tester, 'Planlama araçları');
+      await tester.ensureVisible(find.text('Ayın Gruplarını Güncelle'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Ayın Gruplarını Güncelle'));
       await tester.pumpAndSettle();
       expect(find.textContaining('mevcut nöbetler temizlenir'), findsOneWidget);
@@ -150,6 +153,8 @@ void main() {
       final old = await tester.runAsync(() => repo.loadMonth('2026-11'));
       expect(old!.people[5].dutySeniorityGroup, DutySeniorityGroup.junior);
       expect(old.duties, isNotEmpty);
+      await tester.ensureVisible(find.text('Ayın Gruplarını Güncelle'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Ayın Gruplarını Güncelle'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Onayla'));

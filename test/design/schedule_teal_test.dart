@@ -57,39 +57,18 @@ void main() {
         await tester.pumpWidget(host(SchedulePage(repository: repo)));
         await tester.pumpAndSettle();
         await tester.scrollUntilVisible(
-          find.text('Aktif personel'),
+          find.text('Aktif Personel'),
           100,
           scrollable: activeScheduleScroll(),
         );
         await tester.pumpAndSettle();
-        expect(find.text('Aktif personel'), findsOneWidget);
+        expect(find.text('Aktif Personel'), findsOneWidget);
         await tester.tap(find.byType(DropdownButtonFormField<String>).first);
         await tester.pumpAndSettle();
         await tester.tap(find.text('${m.title} · Taslak').last);
         await tester.pumpAndSettle();
-        await tester.scrollUntilVisible(
-          find.text('Nöbet çizelgesini aç'),
-          200,
-          scrollable: find
-              .descendant(
-                of: find.byType(ListView).last,
-                matching: find.byType(Scrollable),
-              )
-              .first,
-        );
+        await navigateSchedule(tester, 'Nöbet');
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Nöbet çizelgesini aç'));
-        await tester.pumpAndSettle();
-        await tester.scrollUntilVisible(
-          find.text('1 · ${dayNames[m.date(1).weekday - 1]}'),
-          200,
-          scrollable: find
-              .descendant(
-                of: find.byType(ListView).last,
-                matching: find.byType(Scrollable),
-              )
-              .first,
-        );
         expect(find.byType(CompactDutyCard), findsNWidgets(m.days));
         await tester.pumpAndSettle();
         expect(find.text('Pozisyon bilgisi kayıtlı değil'), findsWidgets);
@@ -129,16 +108,18 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Junior: Boş pozisyon'), findsOneWidget);
-      expect(find.text('Geçici senior'), findsOneWidget);
+      expect(find.text('— (Boş)'), findsOneWidget);
+      expect(find.text('Geçici senior · kalıcı grup Çömez'), findsOneWidget);
       expect(
         tester.widget<Card>(find.byType(Card)).color,
         AkysTokens.background,
       );
-      await tester.tap(find.text('1 · Pazar'));
+      await tester.tap(find.byType(ExpansionTile).first);
       await tester.pumpAndSettle();
       expect(find.textContaining('Grup: Çömez'), findsOneWidget);
       expect(find.textContaining('Boşluk gerekçesi:'), findsOneWidget);
+      await tester.ensureVisible(find.byIcon(Icons.edit));
+      await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.edit));
       await tester.pumpAndSettle();
       expect(edits, 1);

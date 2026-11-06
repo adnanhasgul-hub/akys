@@ -95,23 +95,29 @@ class AkysAdaptiveNavigation extends StatelessWidget {
                 children: [
                   for (var i = 0; i < direct; i++)
                     Expanded(
-                      child: _item(
-                        context,
-                        destinations[i],
-                        i == selectedIndex,
-                        () => onSelected(i),
+                      child: Padding(
+                        padding: const EdgeInsets.all(5),
+                        child: _item(
+                          context,
+                          destinations[i],
+                          i == selectedIndex,
+                          () => onSelected(i),
+                        ),
                       ),
                     ),
                   if (destinations.length > 5)
                     Expanded(
-                      child: _item(
-                        context,
-                        const AkysDestination(
-                          label: 'Diğer',
-                          icon: Icons.more_horiz,
+                      child: Padding(
+                        padding: const EdgeInsets.all(5),
+                        child: _item(
+                          context,
+                          const AkysDestination(
+                            label: 'Diğer',
+                            icon: Icons.more_horiz,
+                          ),
+                          selectedIndex >= 4,
+                          () => more(context),
                         ),
-                        selectedIndex >= 4,
-                        () => more(context),
                       ),
                     ),
                 ],
@@ -132,10 +138,10 @@ class AkysAdaptiveNavigation extends StatelessWidget {
     child: TextButton(
       style: TextButton.styleFrom(
         minimumSize: const Size(48, 48),
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 2),
-        backgroundColor: selected ? AkysTokens.selected : null,
-        foregroundColor: AkysTokens.navy,
-        shape: const RoundedRectangleBorder(),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+        backgroundColor: selected ? AkysTokens.primary : null,
+        foregroundColor: selected ? Colors.white : AkysTokens.primary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       onPressed: enabled ? tap : null,
       child: Column(
@@ -144,7 +150,7 @@ class AkysAdaptiveNavigation extends StatelessWidget {
           Icon(destination.icon),
           const SizedBox(height: 4),
           Text(
-            destination.label,
+            destination.label == 'Genel Bakış' ? 'Özet' : destination.label,
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 12),
           ),

@@ -103,43 +103,171 @@ class _DifficultySettingsPanelState extends State<DifficultySettingsPanel> {
     custom = [...widget.settings.customHolidays];
   }
 
-  Widget score(String label, int value, ValueChanged<int> change, String key) =>
-      AkysCard(
-        padding: const EdgeInsets.all(12),
-        child: DropdownButtonFormField<int>(
-          key: ValueKey('$key-$value'),
-          initialValue: value,
-          isExpanded: true,
-          decoration: InputDecoration(labelText: label),
-          items: [
-            for (var n = 1; n <= 10; n++)
-              DropdownMenuItem(value: n, child: Text('$n')),
-          ],
-          onChanged: widget.busy ? null : (n) => setState(() => change(n!)),
-        ),
-      );
+  Widget score(
+    String label,
+    int value,
+    ValueChanged<int> change,
+    String key,
+  ) => Padding(
+    padding: EdgeInsets.zero,
+    child: Container(
+      decoration: BoxDecoration(
+        color: key == 'weekday-4' ? AkysTokens.successSurface : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: LayoutBuilder(
+        builder: (context, bounds) {
+          final large = MediaQuery.textScalerOf(context).scale(14) > 22;
+          final caption = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.calendar_month_outlined,
+                size: 22,
+                color: AkysTokens.primary,
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  label,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          );
+          final control = SizedBox(
+            width: 148,
+            child: Row(
+              children: [
+                IconButton(
+                  tooltip: '$label puanını azalt',
+                  onPressed: widget.busy || value <= 1
+                      ? null
+                      : () => setState(() => change(value - 1)),
+                  icon: const Icon(Icons.remove, size: 18),
+                ),
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    key: ValueKey('$key-$value'),
+                    initialValue: value,
+                    isExpanded: true,
+                    alignment: Alignment.center,
+                    icon: const SizedBox.shrink(),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      fillColor: Colors.transparent,
+                      semanticCounterText: label,
+                    ),
+                    items: [
+                      for (var n = 1; n <= 10; n++)
+                        DropdownMenuItem(
+                          value: n,
+                          child: Center(
+                            child: Text(
+                              '$n',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                    onChanged: widget.busy
+                        ? null
+                        : (n) => setState(() => change(n!)),
+                  ),
+                ),
+                IconButton(
+                  tooltip: '$label puanını artır',
+                  onPressed: widget.busy || value >= 10
+                      ? null
+                      : () => setState(() => change(value + 1)),
+                  icon: const Icon(Icons.add, size: 18),
+                ),
+              ],
+            ),
+          );
+          return large
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    caption,
+                    Align(alignment: Alignment.centerRight, child: control),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(child: caption),
+                    control,
+                  ],
+                );
+        },
+      ),
+    ),
+  );
   @override
   Widget build(BuildContext context) => ListView(
     padding: const EdgeInsets.all(20),
     children: [
-      const AkysSectionHeader(title: 'Nöbet Puanlama Ayarları'),
-      const SizedBox(height: 8),
-      const Text(
-        'Yalnızca yeni ayları etkiler. Mevcut ayların puan snapshot’ları değişmez. Tüm puanlar 1–10 arası tam sayıdır.',
-      ),
-      const SizedBox(height: 20),
-      AkysResponsiveTiles(
-        minimumWidth: 230,
-        maxColumns: 3,
+      Row(
         children: [
-          for (var i = 0; i < 7; i++)
-            score(dayNames[i], days[i], (n) => days[i] = n, 'weekday-${i + 1}'),
-          score('Tatil öncesi puanı', pre, (n) => pre = n, 'pre-holiday'),
+          const Expanded(
+            child: Text(
+              'Nöbet Zorluk Puanları (1–10)',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Puanlama bilgisi',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => AlertDialog(
+                title: const Text('Nöbet Puanlama Ayarları'),
+                content: const Text(
+                  'Yalnızca yeni ayları etkiler. Mevcut ayların puan snapshot’ları değişmez. Tüm puanlar 1–10 arası tam sayıdır.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Kapat'),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
+      const SizedBox(height: 8),
+      AkysCard(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          children: [
+            for (var i = 0; i < 7; i++)
+              score(
+                dayNames[i],
+                days[i],
+                (n) => days[i] = n,
+                'weekday-${i + 1}',
+              ),
+          ],
+        ),
+      ),
       const SizedBox(height: 16),
-      const Text(
-        'Tatil öncesi Cumartesi daima güncel Cumartesi puanını kullanır. Yarım gün tatilinin bir önceki günü otomatik olarak tatil öncesi sayılmaz.',
+      ExpansionTile(
+        title: const Text('Diğer Ayarlar'),
+        leading: const Icon(Icons.settings_outlined),
+        children: [
+          score('Tatil öncesi puanı', pre, (n) => pre = n, 'pre-holiday'),
+          const Text(
+            'Tatil öncesi Cumartesi daima güncel Cumartesi puanını kullanır. Yarım gün tatilinin bir önceki günü otomatik olarak tatil öncesi sayılmaz.',
+          ),
+          ..._calendarSettings(),
+        ],
       ),
       const SizedBox(height: 16),
       Wrap(
@@ -196,70 +324,72 @@ class _DifficultySettingsPanelState extends State<DifficultySettingsPanel> {
           label: feedback!,
           status: saveFailed ? AkysStatus.error : AkysStatus.success,
         ),
-      const SizedBox(height: 28),
-      Text(
-        'Türkiye Resmî Tatil Takvimi',
-        style: Theme.of(context).textTheme.titleLarge,
-      ),
-      Text(
-        'Doğrulanmış yerel yıllar: ${TurkeyHolidayCalendar.supportedYears.join(', ')}. Kaynak: Türkiye Bankalar Birliği, Bankalar için Tatil Günleri. Çevrimdışı çalışır.',
-      ),
-      const SizedBox(height: 8),
-      SelectableText(TurkeyHolidayCalendar.source),
-      const SizedBox(height: 20),
-      Text(
-        'Kullanıcı Tarafından Doğrulanan Özel Günler',
-        style: Theme.of(context).textTheme.titleLarge,
-      ),
-      const Text(
-        'Özel günler puanlama takvimine eklenir; ay oluştururken ayrıca puan seçilir. Resmî tatiller silinmez veya yarım güne düşürülmez.',
-      ),
-      for (final h in custom)
-        Card(
-          child: ListTile(
-            title: Text('${h.date} · ${h.name}'),
-            subtitle: Text(
-              '${h.isHalfDay ? 'Yarım gün' : 'Tam gün'} · ${h.source}',
-            ),
-            trailing: IconButton(
-              tooltip: 'Özel günü kaldır',
-              onPressed: widget.busy
-                  ? null
-                  : () async {
-                      final ok = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Özel Günü Kaldır'),
-                          content: const Text(
-                            'Kaydettikten sonra yeni aylara dahil edilmeyecek. Geçmiş aylar korunur.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, false),
-                              child: const Text('Vazgeç'),
-                            ),
-                            FilledButton(
-                              onPressed: () => Navigator.pop(context, true),
-                              child: const Text('Kaldır'),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (ok == true && mounted) {
-                        setState(() => custom.remove(h));
-                      }
-                    },
-              icon: const Icon(Icons.delete_outline),
-            ),
-          ),
-        ),
-      TextButton.icon(
-        onPressed: widget.busy ? null : _addCustom,
-        icon: const Icon(Icons.event_available),
-        label: const Text('Özel Gün Ekle'),
-      ),
     ],
   );
+  List<Widget> _calendarSettings() => [
+    const SizedBox(height: 28),
+    Text(
+      'Türkiye Resmî Tatil Takvimi',
+      style: Theme.of(context).textTheme.titleLarge,
+    ),
+    Text(
+      'Doğrulanmış yerel yıllar: ${TurkeyHolidayCalendar.supportedYears.join(', ')}. Kaynak: Türkiye Bankalar Birliği, Bankalar için Tatil Günleri. Çevrimdışı çalışır.',
+    ),
+    const SizedBox(height: 8),
+    SelectableText(TurkeyHolidayCalendar.source),
+    const SizedBox(height: 20),
+    Text(
+      'Kullanıcı Tarafından Doğrulanan Özel Günler',
+      style: Theme.of(context).textTheme.titleLarge,
+    ),
+    const Text(
+      'Özel günler puanlama takvimine eklenir; ay oluştururken ayrıca puan seçilir. Resmî tatiller silinmez veya yarım güne düşürülmez.',
+    ),
+    for (final h in custom)
+      Card(
+        child: ListTile(
+          title: Text('${h.date} · ${h.name}'),
+          subtitle: Text(
+            '${h.isHalfDay ? 'Yarım gün' : 'Tam gün'} · ${h.source}',
+          ),
+          trailing: IconButton(
+            tooltip: 'Özel günü kaldır',
+            onPressed: widget.busy
+                ? null
+                : () async {
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Özel Günü Kaldır'),
+                        content: const Text(
+                          'Kaydettikten sonra yeni aylara dahil edilmeyecek. Geçmiş aylar korunur.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Vazgeç'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Kaldır'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (ok == true && mounted) {
+                      setState(() => custom.remove(h));
+                    }
+                  },
+            icon: const Icon(Icons.delete_outline),
+          ),
+        ),
+      ),
+    TextButton.icon(
+      onPressed: widget.busy ? null : _addCustom,
+      icon: const Icon(Icons.event_available),
+      label: const Text('Özel Gün Ekle'),
+    ),
+  ];
   Future<void> _addCustom() async {
     final date = await showDatePicker(
       context: context,

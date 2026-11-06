@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:akys/app/akys_app.dart';
+import 'package:akys/modules/work_schedule/engine/v13/fairness_optimizer.dart';
 import 'package:akys/core/auth/auth_service.dart';
 import 'package:akys/core/auth/auth_state.dart';
 import 'package:akys/modules/work_schedule/data/schedule_repository.dart';
@@ -44,12 +45,21 @@ Future<void> main() async {
     requiredDuties: 54,
     taskWorkdaySchemaVersion: 1,
   );
-  for (var d = 1; d <= 30; d++) {
-    m.duties[d] = [
-      people[(d - 1) % 4].id,
-      if (d <= 24) people[4 + (d - 1) % 3].id,
+  m.boundaryConfirmed = true;
+  final result = await const FairnessOptimizer(nodeLimit: 10000).optimize(m);
+  m.dutyPositions = result.solver.positions;
+  m.engineVersion = '1.3.0';
+  for (final row in m.dutyPositions!) {
+    m.duties[int.parse(row.date.substring(8))] = [
+      row.seniorDutyPersonId!,
+      ...row.juniorDutyPersonIds,
     ];
   }
+  m.v13Diagnostics = {
+    'status': result.solver.statusCode,
+    'optimalityProven': false,
+    'hierarchyProven': false,
+  };
   for (final task in ClinicTask.values) {
     m.tasks[task] = TaskAssignment(people[0].id, people[1].id);
   }

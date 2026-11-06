@@ -142,6 +142,7 @@ void main() {
     await t.tap(find.text('2026 Kasım · Taslak').last);
     await t.pumpAndSettle();
     await navigateSchedule(t, 'Nöbet');
+    await expandScheduleSection(t, 'Planlama araçları');
     final panel = find.byType(V13SolverPanel);
     final state = t.state(panel);
     expect(t.widget<V13SolverPanel>(panel).enabled, v13SolverEnabled);

@@ -6,15 +6,15 @@ class AkysResponsiveTiles extends StatelessWidget {
     required this.children,
     this.minimumWidth = 140,
     this.maxColumns = 4,
+    this.gap = 12,
     super.key,
   });
   final List<Widget> children;
-  final double minimumWidth;
+  final double minimumWidth, gap;
   final int maxColumns;
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, c) {
-      const gap = 12.0;
       final columns = MediaQuery.textScalerOf(context).scale(16) > 24
           ? 1
           : ((c.maxWidth + gap) / (minimumWidth + gap)).floor().clamp(

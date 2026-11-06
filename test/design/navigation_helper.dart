@@ -3,7 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:akys/core/design/akys_design_system.dart';
 
 Future<void> navigateSchedule(WidgetTester tester, String label) async {
-  final title = label == 'Görev Dağılımı' ? 'Görevler' : label;
+  final title = label == 'Görev Dağılımı'
+      ? 'Görevler'
+      : label == 'Genel Bakış' &&
+            tester.view.physicalSize.width / tester.view.devicePixelRatio <
+                AkysTokens.tablet
+      ? 'Özet'
+      : label;
   if (['Ayarlar', 'Birleşik Görünüm', 'Geçmiş Aylar'].contains(title) &&
       tester.view.physicalSize.width / tester.view.devicePixelRatio <
           AkysTokens.tablet) {
@@ -38,3 +44,14 @@ Finder activeScheduleScroll() =>
             matching: find.byType(Scrollable),
           )
           .first;
+
+Future<void> expandScheduleSection(WidgetTester tester, String title) async {
+  await tester.scrollUntilVisible(
+    find.text(title),
+    200,
+    scrollable: activeScheduleScroll(),
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(title).first);
+  await tester.pumpAndSettle();
+}

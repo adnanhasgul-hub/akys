@@ -11,6 +11,7 @@ abstract final class AkysTokens {
   static const border = Color(0xFF647985),
       disabled = Color(0xFF526470),
       disabledSurface = Color(0xFFE6ECEF);
+  static const softBorder = Color(0xFFE2E9EB);
   static const muted = Color(0xFF4C626F), surface = Colors.white;
   static const spaceXs = 4.0,
       spaceSm = 8.0,
@@ -92,9 +93,12 @@ abstract final class ClinicalTealTheme {
       ),
       cardTheme: CardThemeData(
         color: Colors.white,
-        elevation: AkysTokens.elevationFlat,
+        elevation: 1,
+        shadowColor: AkysTokens.navy.withValues(alpha: .12),
         margin: EdgeInsets.zero,
-        shape: shape.copyWith(side: const BorderSide(color: AkysTokens.border)),
+        shape: shape.copyWith(
+          side: const BorderSide(color: AkysTokens.softBorder),
+        ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(

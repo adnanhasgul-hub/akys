@@ -182,7 +182,9 @@ void main() {
       expect(after![1].id, before!.first.id);
       expect(after.map((p) => p.seniorityRank), [1, 2, 3, 4, 5, 6, 7]);
       expect(after[1].dutySeniorityGroup, before.first.dutySeniorityGroup);
-      await t.tap(find.byTooltip('İsmi düzenle').first);
+      await t.tap(find.byKey(ValueKey('person-details-${after.first.id}')));
+      await t.pumpAndSettle();
+      await t.tap(find.text('İsmi düzenle').first);
       await t.pumpAndSettle();
       await t.enterText(
         find.byType(TextFormField),
@@ -208,6 +210,9 @@ void main() {
     await t.tap(find.text('2026 Kasım · Taslak').last);
     await t.pumpAndSettle();
     await navigateSchedule(t, 'Görev Dağılımı');
+    await t.pumpAndSettle();
+    await expandScheduleSection(t, 'Aylık görev ayarları');
+    await t.ensureVisible(find.text('Asıl / Yedek Seç').first);
     await t.pumpAndSettle();
     await t.tap(find.text('Asıl / Yedek Seç').first);
     await t.pumpAndSettle();

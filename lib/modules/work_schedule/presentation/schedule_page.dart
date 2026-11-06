@@ -1,6 +1,8 @@
 import '../../../core/design/akys_design_system.dart';
 import '../engine/v13/constraint_validator.dart';
 import 'compact_duty_card.dart';
+import 'reference_schedule_widgets.dart';
+import '../engine/task_engine.dart';
 import 'combined_day_cards.dart';
 import 'v13_solver_panel.dart';
 
@@ -32,6 +34,7 @@ class SchedulePage extends StatefulWidget {
 class _SchedulePageState extends State<SchedulePage> {
   late final ScheduleController c;
   int section = 0;
+  int dutyView = 0, personnelFilter = 0, taskDay = 1;
   static const sections = [
     'Genel Bakış',
     'Nöbet',
@@ -139,51 +142,10 @@ class _SchedulePageState extends State<SchedulePage> {
                     if (c.busy) const LinearProgressIndicator(),
                     if (c.error != null) _message(c.error!, true),
                     if (c.notice != null) _message(c.notice!, false),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                      child: Wrap(
-                        spacing: 12,
-                        runSpacing: 10,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(
-                            sections[section],
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          SizedBox(
-                            width: MediaQuery.sizeOf(context).width < 400
-                                ? MediaQuery.sizeOf(context).width - 32
-                                : 300,
-                            child: AkysMonthSelector(
-                              options: [
-                                for (final m in c.months)
-                                  AkysMonthOption(
-                                    id: m.id,
-                                    title: m.title,
-                                    statusLabel: statusLabel(m.status),
-                                    status: m.editable
-                                        ? AkysStatus.info
-                                        : AkysStatus.success,
-                                  ),
-                              ],
-                              selectedId: c.selectedId,
-                              loading: c.loading,
-                              onChanged: c.busy ? null : c.select,
-                            ),
-                          ),
-                          FilledButton.icon(
-                            onPressed: c.busy ? null : _createMonth,
-                            icon: const Icon(Icons.add),
-                            label: const Text('Nöbet Hazırla'),
-                          ),
-                          IconButton(
-                            onPressed: c.busy ? null : c.initialize,
-                            tooltip: 'Yeniden yükle',
-                            icon: const Icon(Icons.refresh),
-                          ),
-                        ],
-                      ),
-                    ),
+                    if (section != 3 &&
+                        section != 6 &&
+                        !(section == 0 && c.month != null))
+                      _monthBar(),
                   ],
                 ),
               ),
@@ -221,8 +183,95 @@ class _SchedulePageState extends State<SchedulePage> {
       );
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Çalışma Çizelgesi'),
-          actions: [?widget.logout],
+          backgroundColor: AkysTokens.primary,
+          foregroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          toolbarHeight: section == 0 ? 72 : 58,
+          leading: section == 0
+              ? IconButton(
+                  tooltip: 'Ana sayfa',
+                  onPressed: () => Navigator.maybePop(context),
+                  icon: const Icon(Icons.medical_services_outlined, size: 30),
+                )
+              : null,
+          title: section == 0
+              ? const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'AKYS',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      'A Klinik Yönetim Sistemi',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ],
+                )
+              : Text(
+                  section == 1 ? 'Nöbet Çizelgesi' : sections[section],
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+          actions: [
+            if (section == 3)
+              IconButton(
+                tooltip: 'Personel ekle',
+                icon: const Icon(Icons.add),
+                onPressed: c.busy ? null : _addPerson,
+              ),
+            IconButton(
+              tooltip: 'Ay ve işlemler',
+              icon: Icon(
+                section == 3 || section == 6
+                    ? Icons.more_horiz
+                    : Icons.calendar_month_outlined,
+              ),
+              onPressed: () => showModalBottomSheet<void>(
+                context: context,
+                showDragHandle: true,
+                builder: (_) => SafeArea(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ListenableBuilder(
+                          listenable: c,
+                          builder: (_, _) => _monthBar(),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.auto_awesome),
+                          title: const Text('Nöbet Hazırla'),
+                          onTap: c.busy
+                              ? null
+                              : () {
+                                  Navigator.pop(context);
+                                  _createMonth();
+                                },
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.refresh),
+                          title: const Text('Yeniden yükle'),
+                          onTap: c.busy
+                              ? null
+                              : () {
+                                  Navigator.pop(context);
+                                  c.initialize();
+                                },
+                        ),
+                        if (widget.logout != null) widget.logout!,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         body: SafeArea(
           child: AkysAdaptiveNavigation(
@@ -251,6 +300,77 @@ class _SchedulePageState extends State<SchedulePage> {
       );
     },
   );
+  Widget _monthBar() {
+    final ordered = [...c.months]..sort((a, b) => a.id.compareTo(b.id));
+    final index = ordered.indexWhere((m) => m.id == c.selectedId);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Önceki kayıtlı ay',
+            onPressed: c.busy || index <= 0
+                ? null
+                : () => c.select(ordered[index - 1].id),
+            icon: const Icon(Icons.chevron_left),
+          ),
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              key: ValueKey('month-${c.selectedId}'),
+              initialValue: c.month?.id,
+              isExpanded: true,
+              alignment: Alignment.center,
+              icon: const SizedBox.shrink(),
+              decoration: const InputDecoration(
+                hintText: 'Çalışılan ay',
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 4,
+                  vertical: 10,
+                ),
+              ),
+              selectedItemBuilder: (context) => [
+                for (final m in ordered)
+                  Center(
+                    child: Text(
+                      '${monthNames[m.month - 1]} ${m.year}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+              ],
+              items: [
+                for (final m in ordered)
+                  DropdownMenuItem(
+                    value: m.id,
+                    child: Center(
+                      child: Text(
+                        '${m.title} · ${statusLabel(m.status)}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+              ],
+              onChanged: c.busy
+                  ? null
+                  : (id) {
+                      if (id != null) c.select(id);
+                    },
+            ),
+          ),
+          IconButton(
+            tooltip: 'Sonraki kayıtlı ay',
+            onPressed: c.busy || index < 0 || index >= ordered.length - 1
+                ? null
+                : () => c.select(ordered[index + 1].id),
+            icon: const Icon(Icons.chevron_right),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _message(String text, bool error) => Container(
     width: double.infinity,
     color: (error ? AkysColors.forbidden : AkysColors.brand).withValues(
@@ -292,81 +412,147 @@ class _SchedulePageState extends State<SchedulePage> {
       : validateDuties(m);
   Widget _overview() {
     final m = c.month;
-    final warnings = m == null
-        ? 0
-        : _hardWarnings(m).length +
-              (m.dutyPositions == null
-                  ? [
-                      for (var d = 1; d <= m.days; d++)
-                        if (compositionWarning(m, d) != null) d,
-                    ].length
-                  : 0);
+    final stats = m == null ? null : statistics(m);
+    final total = stats?.values.fold<int>(0, (n, p) => n + p.total) ?? 0;
+    final points =
+        stats?.values.fold<int>(0, (n, p) => n + p.totalDifficulty) ?? 0;
+    final vacancies = m?.dutyPositions
+        ?.where((p) => p.juniorDutyPersonIds.isEmpty)
+        .length;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const AkysSectionHeader(
-          title: 'Genel Bakış',
-          description: 'Seçili ayın planlama durumu',
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Merhaba',
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    Text(
+                      m == null
+                          ? 'Planlamaya başlamak için bir ay seçin.'
+                          : '${monthNames[m.month - 1]} ${m.year} · ${statusLabel(m.status)}',
+                    ),
+                  ],
+                ),
+              ),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  'assets/images/clinical_team.jpg',
+                  width: 116,
+                  height: 86,
+                  fit: BoxFit.cover,
+                  excludeFromSemantics: true,
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         AkysResponsiveTiles(
+          maxColumns: 4,
           children: [
-            AkysStatCard(
-              compact: true,
-              label: 'Aktif personel',
+            ScheduleMetric(
+              label: 'Aktif Personel',
               value: '${c.personnel.where((p) => p.active).length}',
-              icon: Icons.groups_outlined,
+              icon: Icons.groups,
             ),
-            AkysStatCard(
-              compact: true,
-              label: 'Kayıtlı ay',
-              value: '${c.months.length}',
-              icon: Icons.calendar_month,
+            ScheduleMetric(
+              label: 'Gün',
+              value: m == null ? '—' : '${m.days}',
+              icon: Icons.calendar_month_outlined,
             ),
-            AkysStatCard(
-              compact: true,
-              label: 'Kesin / Paylaşılan',
-              value:
-                  '${c.months.where((m) => m.status == MonthStatus.finalised || m.status == MonthStatus.published).length}',
-              icon: Icons.verified_outlined,
+            ScheduleMetric(
+              label: 'Planlanan Nöbet',
+              value: m == null
+                  ? '—'
+                  : '${m.duties.values.where((d) => d.isNotEmpty).length}',
+              icon: Icons.bed_outlined,
             ),
-            AkysStatCard(
-              compact: true,
-              label: 'Seçili ay',
-              value: m == null ? 'Seçilmedi' : statusLabel(m.status),
-              icon: Icons.event_note,
+            ScheduleMetric(
+              label: 'Boş Çömez',
+              value: vacancies == null ? '—' : '$vacancies',
+              icon: Icons.warning_amber_rounded,
+              warning: true,
             ),
-            if (m != null)
-              AkysStatCard(
-                compact: true,
-                label: 'Çizelge uyarıları',
-                value: '$warnings',
-                icon: Icons.info_outline,
-              ),
           ],
         ),
+        const SizedBox(height: 22),
+        FilledButton.icon(
+          onPressed: c.busy ? null : _createMonth,
+          icon: const Icon(Icons.auto_awesome),
+          label: const Text('Nöbet Hazırla'),
+        ),
         const SizedBox(height: 16),
-        if (m == null)
-          const AkysEmptyState(
-            title: 'Ay seçilmedi',
-            message: 'Nöbet Hazırla ile yeni ay oluşturun veya kayıtlı bir ay seçin.',
-          )
-        else ...[
-          Text(m.title, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          AkysPrimaryButton(
-            label: 'Nöbet çizelgesini aç',
-            onPressed: () => setState(() => section = 1),
+        AkysCard(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Ay Özeti',
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 6),
+              _summaryRow(Icons.groups_outlined, 'Toplam Nöbet', '$total'),
+              _summaryRow(
+                Icons.assignment_outlined,
+                'Toplam Zorluk Puanı',
+                '$points',
+              ),
+              _summaryRow(
+                Icons.bar_chart,
+                'Ortalama Puan',
+                total == 0
+                    ? '—'
+                    : (points / total).toStringAsFixed(2).replaceAll('.', ','),
+              ),
+            ],
           ),
-        ],
-        const SizedBox(height: 16),
+        ),
+        if (m == null)
+          const Padding(
+            padding: EdgeInsets.only(top: 12),
+            child: Text(
+              'Ay seçilmedi. Takvim simgesinden kayıtlı bir ay seçin.',
+            ),
+          ),
+        const SizedBox(height: 12),
+        ExpansionTile(
+          title: const Text('Planlama ayrıntıları'),
+          children: [
+            Text(
+              '${c.months.length} kayıtlı ay · ${c.months.where((m) => !m.editable).length} kesin / paylaşılan ay',
+            ),
+            if (m != null) ...[
+              Text('${_hardWarnings(m).length} zorunlu kural uyarısı'),
+              if (vacancies == null)
+                const Text(
+                  'Eski ay: pozisyon bilgisi kayıtlı değil; boş junior sayısı tahmin edilmez.',
+                ),
+              TextButton(
+                onPressed: () => setState(() => section = 1),
+                child: const Text('Nöbet çizelgesini aç'),
+              ),
+            ],
+          ],
+        ),
         const ExpansionTile(
           title: Text('Planlama yardımı'),
           children: [
             Padding(
-              padding: EdgeInsets.all(16),
+              padding: EdgeInsets.all(12),
               child: Text(
-                '1. Personeli ve kıdem sırasını kontrol edin.\n2. Ay oluşturun; personel snapshot’ı sabitlenir.\n3. Tutamaz / Tutacak ve önceki ay nöbetlerini kaydedin.\n4. Ön kontrol ve oluşturma sonrası çizelgeyi inceleyin.\n5. Görevleri seçin. V1.3 yalnız geliştirme taslağıdır; kesinleştirme ve paylaşım kapalıdır.',
+                'Personeli ve ay snapshot’ını kontrol edin. Nöbet ekranındaki Planlama araçları üzerinden kısıtları, solver önizlemesini ve istatistikleri açın. V1.3 yalnız taslak kaydedilir; kesinleştirme ve paylaşım kapalıdır.',
               ),
             ),
           ],
@@ -375,199 +561,222 @@ class _SchedulePageState extends State<SchedulePage> {
     );
   }
 
-  Widget _personnel() => ReorderableListView.builder(
-    header: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 8,
-        children: [
-          Text(
-            '${c.personnel.where((p) => p.active).length} aktif / ${c.personnel.length} personel',
-          ),
-          FilledButton.icon(
-            onPressed: c.busy
-                ? null
-                : () async {
-                    final name = await textInput('Personel Ekle');
-                    if (name != null) await c.addPerson(name);
-                  },
-            icon: const Icon(Icons.person_add_alt),
-            label: const Text('Personel Ekle'),
-          ),
-          const Text('Sıralamak için tutamacı sürükleyin. K1 en kıdemlidir.'),
-        ],
-      ),
+  Widget _summaryRow(IconData icon, String title, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      children: [
+        Icon(icon, size: 19, color: AkysTokens.primary),
+        const SizedBox(width: 8),
+        Expanded(child: Text(title)),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+      ],
     ),
-    padding: const EdgeInsets.symmetric(horizontal: 16),
-    itemCount: c.personnel.length,
-    buildDefaultDragHandles: false,
-    onReorderItem: (oldIndex, newIndex) async {
-      if (c.busy) return;
-      final after = [...c.personnel];
-      after.insert(newIndex, after.removeAt(oldIndex));
-      await c.updatePeople(after);
-    },
-    itemBuilder: (context, i) => _personCard(c.personnel[i], i),
   );
-  Widget _personCard(Personnel p, int index) => Padding(
-    key: ValueKey(p.id),
-    padding: const EdgeInsets.only(bottom: 8),
-    child: AkysCard(
-      padding: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                rankBadge(p.seniorityRank),
-                const SizedBox(width: 8),
-                Expanded(child: Text(p.displayName)),
-                IconButton(
-                  tooltip: 'İsmi düzenle',
-                  onPressed: c.busy
-                      ? null
-                      : () async {
-                          final name = await textInput(
-                            'İsmi düzenle',
-                            initial: p.displayName,
-                          );
-                          if (name != null) {
-                            await c.updatePeople([
-                              for (final x in c.personnel)
-                                if (x.id == p.id) x.copy(name: name) else x,
-                            ]);
-                          }
-                        },
-                  icon: const Icon(Icons.edit_outlined),
-                ),
-                ReorderableDragStartListener(
-                  index: index,
-                  enabled: !c.busy,
-                  child: const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Icon(Icons.drag_handle),
-                  ),
-                ),
-              ],
-            ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                Text(dutyGroupLabel(p.dutySeniorityGroup)),
-                Text(p.active ? 'Aktif' : 'Pasif'),
-              ],
-            ),
-            ExpansionTile(
-              key: ValueKey('person-details-${p.id}'),
-              tilePadding: EdgeInsets.zero,
-              title: const Text('Personel ayrıntıları'),
-              children: [
-                const Text(
-                  'Genel kıdem sırası tutamaçla değiştirilir. Nöbet kısıtları seçili ayın Nöbet ekranında düzenlenir.',
-                ),
-                Text(
-                  p.profession == 'resident_physician'
-                      ? 'Asistan Hekim'
-                      : p.profession,
-                ),
-                if (c.month != null &&
-                    c.month!.people.any(
-                      (person) => person.personId == p.id,
-                    )) ...[
-                  Text(
-                    'Seçili ay: ${c.month!.title} · Tutamaz: ${c.month!.constraints[p.id]?.cannot.length ?? 0} · Tutacak: ${c.month!.constraints[p.id]?.must.length ?? 0}',
-                  ),
-                  TextButton.icon(
-                    onPressed: c.busy
-                        ? null
-                        : () => setState(() => section = 1),
-                    icon: const Icon(Icons.calendar_month_outlined),
-                    label: const Text('Ayın nöbet kısıtlarına git'),
-                  ),
-                ],
 
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 12,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+  Future<void> _addPerson() async {
+    final name = await textInput('Personel Ekle');
+    if (name != null) await c.addPerson(name);
+  }
+
+  Widget _personnel() {
+    final people = c.personnel
+        .where(
+          (p) =>
+              personnelFilter == 0 ||
+              (personnelFilter == 1
+                  ? p.dutySeniorityGroup == DutySeniorityGroup.senior
+                  : p.dutySeniorityGroup == DutySeniorityGroup.junior),
+        )
+        .toList();
+    return ReorderableListView.builder(
+      header: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: ScheduleSegments(
+          labels: [
+            'Tümü (${c.personnel.length})',
+            'Kıdemli (${c.personnel.where((p) => p.dutySeniorityGroup == DutySeniorityGroup.senior).length})',
+            'Çömez (${c.personnel.where((p) => p.dutySeniorityGroup == DutySeniorityGroup.junior).length})',
+          ],
+          selected: personnelFilter,
+          onChanged: (i) => setState(() => personnelFilter = i),
+        ),
+      ),
+      footer: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          children: [
+            const Text(
+              'Sıralamak için tutamacı sürükleyin. K1 en kıdemlidir.',
+              style: TextStyle(fontSize: 11),
+            ),
+            TextButton.icon(
+              onPressed: c.busy ? null : _addPerson,
+              icon: const Icon(Icons.person_add_alt),
+              label: const Text('Personel Ekle'),
+            ),
+          ],
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      itemCount: people.length,
+      buildDefaultDragHandles: false,
+      onReorderItem: (oldIndex, newIndex) async {
+        if (c.busy || personnelFilter != 0) return;
+        final after = [...c.personnel];
+        after.insert(newIndex, after.removeAt(oldIndex));
+        await c.updatePeople(after);
+      },
+      itemBuilder: (context, i) =>
+          _personCard(people[i], c.personnel.indexOf(people[i])),
+    );
+  }
+
+  Widget _personCard(Personnel p, int index) {
+    final stat = c.month == null ? null : statistics(c.month!)[p.id];
+    return Padding(
+      key: ValueKey(p.id),
+      padding: const EdgeInsets.only(bottom: 6),
+      child: AkysCard(
+        padding: EdgeInsets.zero,
+        child: ExpansionTile(
+          key: ValueKey('person-details-${p.id}'),
+          dense: true,
+          minTileHeight: 60,
+          visualDensity: VisualDensity.compact,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 10),
+          childrenPadding: const EdgeInsets.all(12),
+          leading: rankBadge(p.seniorityRank),
+          title: Text(
+            p.displayName,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          ),
+          subtitle: Text(
+            '${dutyGroupLabel(p.dutySeniorityGroup)} · ${p.active ? (stat == null ? 'Aktif' : '${stat.total} nöbet · Ort. Puan: ${stat.total == 0 ? '—' : (stat.totalDifficulty / stat.total).toStringAsFixed(1)}') : 'Pasif'}',
+            style: const TextStyle(fontSize: 11),
+          ),
+          trailing: ReorderableDragStartListener(
+            index: index,
+            enabled: !c.busy && personnelFilter == 0,
+            child: const Padding(
+              padding: EdgeInsets.all(8),
+              child: Icon(Icons.drag_indicator, size: 18),
+            ),
+          ),
+          children: [
+            TextButton.icon(
+              onPressed: c.busy
+                  ? null
+                  : () async {
+                      final name = await textInput(
+                        'İsmi düzenle',
+                        initial: p.displayName,
+                      );
+                      if (name != null) {
+                        await c.updatePeople([
+                          for (final x in c.personnel)
+                            if (x.id == p.id) x.copy(name: name) else x,
+                        ]);
+                      }
+                    },
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('İsmi düzenle'),
+            ),
+            const Text(
+              'Genel kıdem sırası tutamaçla değiştirilir. Nöbet kısıtları seçili ayın Nöbet ekranında düzenlenir.',
+            ),
+            Text(
+              p.profession == 'resident_physician'
+                  ? 'Asistan Hekim'
+                  : p.profession,
+            ),
+            if (c.month != null &&
+                c.month!.people.any((person) => person.personId == p.id)) ...[
+              Text(
+                'Seçili ay: ${c.month!.title} · Tutamaz: ${c.month!.constraints[p.id]?.cannot.length ?? 0} · Tutacak: ${c.month!.constraints[p.id]?.must.length ?? 0}',
+              ),
+              TextButton.icon(
+                onPressed: c.busy ? null : () => setState(() => section = 1),
+                icon: const Icon(Icons.calendar_month_outlined),
+                label: const Text('Ayın nöbet kısıtlarına git'),
+              ),
+            ],
+
+            Wrap(
+              spacing: 16,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Switch(
-                          value: p.active,
-                          onChanged: c.busy
-                              ? null
-                              : (active) async {
-                                  if (!active &&
-                                      !await confirm(
-                                        'Personeli pasifleştir',
-                                        '${p.displayName} yeni aylara dahil edilmeyecek. Geçmiş aylar korunacak.',
-                                      )) {
-                                    return;
-                                  }
+                    Switch(
+                      value: p.active,
+                      onChanged: c.busy
+                          ? null
+                          : (active) async {
+                              if (!active &&
+                                  !await confirm(
+                                    'Personeli pasifleştir',
+                                    '${p.displayName} yeni aylara dahil edilmeyecek. Geçmiş aylar korunacak.',
+                                  )) {
+                                return;
+                              }
+                              await c.updatePeople([
+                                for (final x in c.personnel)
+                                  if (x.id == p.id)
+                                    x.copy(active: active)
+                                  else
+                                    x,
+                              ]);
+                            },
+                    ),
+                    Text(p.active ? 'Aktif' : 'Pasif'),
+                  ],
+                ),
+                SizedBox(
+                  width: 180,
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Nöbet Grubu',
+                      isDense: true,
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<DutySeniorityGroup>(
+                        key: ValueKey('duty-group-${p.id}'),
+                        value: p.dutySeniorityGroup,
+                        isExpanded: true,
+                        isDense: true,
+                        items: [
+                          for (final group in DutySeniorityGroup.values)
+                            DropdownMenuItem(
+                              value: group,
+                              child: Text(dutyGroupLabel(group)),
+                            ),
+                        ],
+                        onChanged: c.busy
+                            ? null
+                            : (group) async {
+                                if (group != null) {
                                   await c.updatePeople([
                                     for (final x in c.personnel)
                                       if (x.id == p.id)
-                                        x.copy(active: active)
+                                        x.copy(dutySeniorityGroup: group)
                                       else
                                         x,
                                   ]);
-                                },
-                        ),
-                        Text(p.active ? 'Aktif' : 'Pasif'),
-                      ],
-                    ),
-                    SizedBox(
-                      width: 180,
-                      child: InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: 'Nöbet Grubu',
-                          isDense: true,
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<DutySeniorityGroup>(
-                            key: ValueKey('duty-group-${p.id}'),
-                            value: p.dutySeniorityGroup,
-                            isExpanded: true,
-                            isDense: true,
-                            items: [
-                              for (final group in DutySeniorityGroup.values)
-                                DropdownMenuItem(
-                                  value: group,
-                                  child: Text(dutyGroupLabel(group)),
-                                ),
-                            ],
-                            onChanged: c.busy
-                                ? null
-                                : (group) async {
-                                    if (group != null) {
-                                      await c.updatePeople([
-                                        for (final x in c.personnel)
-                                          if (x.id == p.id)
-                                            x.copy(dutySeniorityGroup: group)
-                                          else
-                                            x,
-                                      ]);
-                                    }
-                                  },
-                          ),
-                        ),
+                                }
+                              },
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ],
             ),
           ],
         ),
       ),
-    ),
-  );
+    );
+  }
 
   Future<void> _createMonth() async {
     if (c.personnel.where((p) => p.active).isEmpty) {
@@ -720,78 +929,101 @@ class _SchedulePageState extends State<SchedulePage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _monthHeading(m),
-        V13SolverPanel(
-          key: ValueKey('v13-${m.id}-${m.revision}'),
-          month: m,
-          onSave: (next) => c.save(next),
+        ScheduleSegments(
+          labels: const ['Liste', 'Takvim'],
+          selected: dutyView,
+          onChanged: (i) => setState(() => dutyView = i),
         ),
-        if (m.difficultySchemaVersion == 0)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 12),
-            child: Text(
-              'Eski ay: puan/tatil snapshot’ı yok. Puanlar başlangıç haftalık değerlerinden türetilir; geçmiş takvim sessizce değiştirilmez.',
-            ),
-          ),
-        if (m.editable)
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                onPressed: c.busy ? null : () => _constraints(m),
-                icon: const Icon(Icons.event_busy),
-                label: const Text('Tutamaz / Tutacak'),
-              ),
-              OutlinedButton.icon(
-                onPressed: c.busy ? null : () => _boundary(m),
-                icon: const Icon(Icons.skip_previous),
-                label: Text(
-                  m.boundarySource == 'previous_month'
-                      ? 'Önceki ay sınırı · Otomatik'
-                      : 'Önceki ay sınırı · Manuel',
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: c.busy
-                    ? null
-                    : () async {
-                        if (await confirm(
-                          'Ayın Gruplarını Güncelle',
-                          'Yalnızca bu taslak ayın nöbet grupları güncel personel listesinden alınacak. İsimler ve kıdem sırası korunur. Grup değişmişse mevcut nöbetler temizlenir; yeniden oluşturmanız gerekir.',
-                        )) {
-                          await c.refreshMonthGroups();
-                        }
-                      },
-                icon: const Icon(Icons.sync),
-                label: const Text('Ayın Gruplarını Güncelle'),
-              ),
-              OutlinedButton.icon(
-                onPressed: c.busy ? null : () => _precheck(m),
-                icon: const Icon(Icons.fact_check_outlined),
-                label: const Text('Ön kontrol'),
-              ),
-              FilledButton.icon(
-                onPressed: c.busy
-                    ? null
-                    : () async {
-                        if (m.duties.isNotEmpty &&
-                            !await confirm(
-                              'Yeniden oluştur',
-                              'Mevcut nöbetler ve manuel nöbet düzenlemeleri değiştirilecek.',
-                            )) {
-                          return;
-                        }
-                        await c.generate();
-                      },
-                icon: const Icon(Icons.auto_awesome),
-                label: const Text('Listeyi Oluştur'),
-              ),
-            ],
-          ),
         const SizedBox(height: 12),
-        Text(
-          'En fazla 8 nöbet · Tarihler arası ≥3 gün · ${m.requiredDuties} toplam · ${statusLabel(m.status)}',
+        if (m.duties.isNotEmpty) ...[
+          if (dutyView == 0) _calendar(m) else DutyMonthGrid(month: m),
+          const SizedBox(height: 16),
+        ],
+        ExpansionTile(
+          key: const PageStorageKey('duty-tools'),
+          maintainState: true,
+          title: const Text('Planlama araçları'),
+          subtitle: Text(statusLabel(m.status)),
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _monthHeading(m),
+                V13SolverPanel(
+                  key: ValueKey('v13-${m.id}-${m.revision}'),
+                  month: m,
+                  onSave: (next) => c.save(next),
+                ),
+                if (m.difficultySchemaVersion == 0)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      'Eski ay: puan/tatil snapshot’ı yok. Puanlar başlangıç haftalık değerlerinden türetilir; geçmiş takvim sessizce değiştirilmez.',
+                    ),
+                  ),
+                if (m.editable)
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: c.busy ? null : () => _constraints(m),
+                        icon: const Icon(Icons.event_busy),
+                        label: const Text('Tutamaz / Tutacak'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: c.busy ? null : () => _boundary(m),
+                        icon: const Icon(Icons.skip_previous),
+                        label: Text(
+                          m.boundarySource == 'previous_month'
+                              ? 'Önceki ay sınırı · Otomatik'
+                              : 'Önceki ay sınırı · Manuel',
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: c.busy
+                            ? null
+                            : () async {
+                                if (await confirm(
+                                  'Ayın Gruplarını Güncelle',
+                                  'Yalnızca bu taslak ayın nöbet grupları güncel personel listesinden alınacak. İsimler ve kıdem sırası korunur. Grup değişmişse mevcut nöbetler temizlenir; yeniden oluşturmanız gerekir.',
+                                )) {
+                                  await c.refreshMonthGroups();
+                                }
+                              },
+                        icon: const Icon(Icons.sync),
+                        label: const Text('Ayın Gruplarını Güncelle'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: c.busy ? null : () => _precheck(m),
+                        icon: const Icon(Icons.fact_check_outlined),
+                        label: const Text('Ön kontrol'),
+                      ),
+                      FilledButton.icon(
+                        onPressed: c.busy
+                            ? null
+                            : () async {
+                                if (m.duties.isNotEmpty &&
+                                    !await confirm(
+                                      'Yeniden oluştur',
+                                      'Mevcut nöbetler ve manuel nöbet düzenlemeleri değiştirilecek.',
+                                    )) {
+                                  return;
+                                }
+                                await c.generate();
+                              },
+                        icon: const Icon(Icons.auto_awesome),
+                        label: const Text('Listeyi Oluştur'),
+                      ),
+                    ],
+                  ),
+                const SizedBox(height: 12),
+                Text(
+                  'En fazla 8 nöbet · Tarihler arası ≥3 gün · ${m.requiredDuties} toplam · ${statusLabel(m.status)}',
+                ),
+              ],
+            ),
+          ],
         ),
         if (m.duties.isEmpty)
           const Padding(
@@ -801,17 +1033,16 @@ class _SchedulePageState extends State<SchedulePage> {
             ),
           )
         else ...[
-          const SizedBox(height: 16),
-          _calendar(m),
-          const SizedBox(height: 24),
-          Text(
-            'Canlı İstatistikler',
-            style: Theme.of(context).textTheme.titleLarge,
+          const SizedBox(height: 12),
+          ExpansionTile(
+            title: const Text('Canlı İstatistikler'),
+            children: [
+              const Text(
+                'Tek: tek kişi · Eşli: en az iki kişi · Çömezli: yanında en az bir Çömez grubu hekim var.',
+              ),
+              _statistics(m),
+            ],
           ),
-          const Text(
-            'Tek: tek kişi · Eşli: en az iki kişi · Çömezli: yanında en az bir Çömez grubu hekim var.',
-          ),
-          _statistics(m),
         ],
       ],
     );
@@ -1154,6 +1385,7 @@ class _SchedulePageState extends State<SchedulePage> {
           ),
         AkysResponsiveTiles(
           minimumWidth: 280,
+          gap: 6,
           maxColumns: 3,
           children: [
             for (var d = 1; d <= m.days; d++)
@@ -1355,79 +1587,231 @@ class _SchedulePageState extends State<SchedulePage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _monthHeading(m),
-        const Text(
-          'Aylık asıl ve yedekleri seçin. Asıl nöbet ertesi ise yedek görevi devralır. İkisi de uygun değilse görev karşılanamaz; otomatik üçüncü kişi atanmaz.',
-        ),
+        _dailyTaskPreview(m),
         const SizedBox(height: 16),
-        if (m.taskWorkdaySchemaVersion == 0) ...[
-          const Text('Eski ay: mevcut görev davranışı korunuyor.'),
-          if (m.editable)
-            OutlinedButton(
-              onPressed: c.busy
-                  ? null
-                  : () async {
-                      if (await confirm(
-                        'Resmî iş günü kuralını uygula',
-                        'Bu taslak ayın hafta sonu ve tam tatil görevleri pasif, yarım tatil görevleri 13.00 öncesi olacaktır. Nöbetler ve puanlar değişmez. Devam edilsin mi?',
-                      )) {
-                        await c.applyTaskWorkdays();
-                      }
-                    },
-              child: const Text(
-                'Görevleri Resmî İş Günlerine Göre Yeniden Hesapla',
-              ),
-            ),
-        ] else
-          const Text(
-            'Görevler yalnız resmî iş günlerinde; yarım tatillerde 13.00 öncesinde geçerlidir.',
-          ),
-        AkysResponsiveTiles(
-          minimumWidth: 280,
-          maxColumns: 3,
+        ExpansionTile(
+          title: const Text('Aylık görev ayarları'),
+          maintainState: true,
           children: [
-            for (final task in ClinicTask.values)
-              AkysCard(
-                padding: EdgeInsets.zero,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.assignment, color: AkysTokens.primary),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              taskLabel(task),
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Asıl: ${_taskName(m, m.tasks[task]?.primary)}\nYedek: ${_taskName(m, m.tasks[task]?.backup)}',
-                      ),
-                      if (m.editable)
-                        TextButton.icon(
-                          onPressed: c.busy ? null : () => _editTask(m, task),
-                          icon: const Icon(Icons.edit),
-                          label: const Text('Asıl / Yedek Seç'),
-                        ),
-                    ],
+            _monthHeading(m),
+            const Text(
+              'Aylık asıl ve yedekleri seçin. Asıl nöbet ertesi ise yedek görevi devralır. İkisi de uygun değilse görev karşılanamaz; otomatik üçüncü kişi atanmaz.',
+            ),
+            const SizedBox(height: 16),
+            if (m.taskWorkdaySchemaVersion == 0) ...[
+              const Text('Eski ay: mevcut görev davranışı korunuyor.'),
+              if (m.editable)
+                OutlinedButton(
+                  onPressed: c.busy
+                      ? null
+                      : () async {
+                          if (await confirm(
+                            'Resmî iş günü kuralını uygula',
+                            'Bu taslak ayın hafta sonu ve tam tatil görevleri pasif, yarım tatil görevleri 13.00 öncesi olacaktır. Nöbetler ve puanlar değişmez. Devam edilsin mi?',
+                          )) {
+                            await c.applyTaskWorkdays();
+                          }
+                        },
+                  child: const Text(
+                    'Görevleri Resmî İş Günlerine Göre Yeniden Hesapla',
                   ),
                 ),
+            ] else
+              const Text(
+                'Görevler yalnız resmî iş günlerinde; yarım tatillerde 13.00 öncesinde geçerlidir.',
               ),
+            AkysResponsiveTiles(
+              minimumWidth: 280,
+              maxColumns: 3,
+              children: [
+                for (final task in ClinicTask.values)
+                  AkysCard(
+                    padding: EdgeInsets.zero,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.assignment, color: AkysTokens.primary),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  taskLabel(task),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Asıl: ${_taskName(m, m.tasks[task]?.primary)}\nYedek: ${_taskName(m, m.tasks[task]?.backup)}',
+                          ),
+                          if (m.editable)
+                            TextButton.icon(
+                              onPressed: c.busy
+                                  ? null
+                                  : () => _editTask(m, task),
+                              icon: const Icon(Icons.edit),
+                              label: const Text('Asıl / Yedek Seç'),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ],
         ),
         const SizedBox(height: 16),
-        Text(
-          'Günlük Sonuçlar ve Manuel Override',
-          style: Theme.of(context).textTheme.titleLarge,
+        ExpansionTile(
+          title: const Text('Günlük Sonuçlar ve Manuel Override'),
+          children: [_combinedRows(m)],
         ),
-        _combinedRows(m),
+      ],
+    );
+  }
+
+  Widget _dailyTaskPreview(ScheduleMonth m) {
+    final day = taskDay.clamp(1, m.days);
+    final tasks = dailyTasks(m, day);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 76 * MediaQuery.textScalerOf(context).scale(1),
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: m.days,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (_, i) => SizedBox(
+              width: 64 * MediaQuery.textScalerOf(context).scale(1),
+              child: TextButton(
+                style: TextButton.styleFrom(
+                  backgroundColor: day == i + 1
+                      ? AkysTokens.primary
+                      : Colors.white,
+                  foregroundColor: day == i + 1
+                      ? Colors.white
+                      : AkysTokens.navy,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: AkysTokens.softBorder),
+                  ),
+                ),
+                onPressed: () => setState(() => taskDay = i + 1),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '${i + 1}'.padLeft(2, '0'),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      shortWeekdays[m.date(i + 1).weekday - 1],
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        AkysCard(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              const Icon(Icons.nightlight_round, color: AkysTokens.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$day ${monthNames[m.month - 1]} ${m.year} · ${dayNames[m.date(day).weekday - 1]}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      'Nöbet: ${(m.duties[day] ?? []).map((id) => m.person(id).displayName).join(', ')}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        AkysCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              for (final task in tasks)
+                ExpansionTile(
+                  dense: true,
+                  minTileHeight: 48,
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+                  childrenPadding: const EdgeInsets.all(12),
+                  leading: Icon(
+                    Icons.assignment,
+                    size: 22,
+                    color: AkysColors.task(task.task),
+                  ),
+                  title: Wrap(
+                    spacing: 12,
+                    runSpacing: 2,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        taskLabel(task.task),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        !task.active
+                            ? '— (Kapalı)'
+                            : '${task.personId == null ? 'Görev karşılanamıyor' : m.person(task.personId!).displayName}${task.halfDay ? ' · 13.00 öncesi' : ''}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                  children: [
+                    Text(task.workPeriodLabel),
+                    if (task.active) ...[
+                      Text(
+                        'Asıl: ${_taskName(m, m.tasks[task.task]?.primary)} · Yedek: ${_taskName(m, m.tasks[task.task]?.backup)}',
+                      ),
+                      for (final w in task.warnings)
+                        AkysStatusChip(label: w, status: AkysStatus.warning),
+                      if (m.editable)
+                        TextButton(
+                          onPressed: c.busy
+                              ? null
+                              : () => _override(m, day, task.task),
+                          child: const Text('Görevi düzenle'),
+                        ),
+                    ],
+                  ],
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        AkysStatusChip(
+          label: m.taskWorkdaySchemaVersion == 0
+              ? 'Eski ay: mevcut görev davranışı korunuyor.'
+              : 'Hafta sonu ve tam resmî tatillerde klinik görevler pasiftir. Yarım tatillerde 13.00 öncesi geçerlidir.',
+          status: AkysStatus.info,
+        ),
       ],
     );
   }
@@ -1714,7 +2098,10 @@ Widget rankBadge(int rank) => Container(
   ),
   child: Text(
     'K$rank',
-    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+    style: TextStyle(
+      color: [1, 6, 7].contains(rank) ? AkysTokens.navy : Colors.white,
+      fontWeight: FontWeight.bold,
+    ),
   ),
 );
 Widget personChip(PersonSnapshot p) => Row(
