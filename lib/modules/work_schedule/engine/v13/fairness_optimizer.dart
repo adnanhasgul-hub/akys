@@ -3,6 +3,7 @@ import '../../domain/duty_positions.dart';
 import 'feasibility_solver.dart';
 import 'solver_result.dart';
 import 'incumbent_repair.dart';
+import 'difficulty_repair.dart';
 
 class PersonFairness {
   PersonFairness(this.person);
@@ -143,6 +144,10 @@ class FairnessReport {
           ...g.map((p) => -p.easyThursday),
         ],
       ),
+      'maximumDifficulty': [
+        people.values.fold<int>(0, (max, p) => p.points > max ? p.points : max),
+      ],
+      'difficultyRange': [spread(people.values.map((p) => p.points))],
       'averageDifficulty': groupValues(
         (g) => [spread(g.map((p) => p.average))],
       ),
@@ -166,7 +171,7 @@ class OptimizationStage {
 }
 
 class FairnessResult {
-  FairnessResult(this.solver, this.report)
+  FairnessResult(this.solver, this.report, {this.localRepair})
     : stages = {
         if (report != null)
           for (final entry in report.stages.entries)
@@ -177,6 +182,7 @@ class FairnessResult {
                       report.substitutions == 0),
             ),
       };
+  final DifficultyRepairResult? localRepair;
   final SolverResult solver;
   final FairnessReport? report;
   final Map<String, OptimizationStage> stages;
@@ -190,15 +196,21 @@ class FairnessResult {
 }
 
 class FairnessOptimizer {
-  const FairnessOptimizer({this.nodeLimit = 100000, this.yieldEvery = 32});
-  final int nodeLimit, yieldEvery;
+  const FairnessOptimizer({
+    this.nodeLimit = 100000,
+    this.yieldEvery = 32,
+    this.localCandidateLimit = 2000,
+    this.localTimeLimit,
+  });
+  final int nodeLimit, yieldEvery, localCandidateLimit;
+  final Duration? localTimeLimit;
   Future<FairnessResult> optimize(
     ScheduleMonth input, {
     SolverCancellation? cancellation,
     void Function(int, int, int?)? onProgress,
   }) async {
     final m = input.clone();
-    final result =
+    var result =
         await FeasibilitySolver(
           nodeLimit: nodeLimit,
           yieldEvery: yieldEvery,
@@ -215,9 +227,46 @@ class FairnessOptimizer {
             nodeLimit ~/ 2,
           ),
         );
+    DifficultyRepairResult? localRepair;
+    if (result.hasValidIncumbent &&
+        !result.cancelled &&
+        localCandidateLimit > 0) {
+      final local = localRepair = await improveDifficultyLocally(
+        m,
+        result.positions,
+        cancellation: cancellation,
+        candidateLimit: localCandidateLimit,
+        timeLimit: localTimeLimit,
+        yieldEvery: yieldEvery,
+      );
+      {
+        final changed = !identical(local.positions, result.positions);
+        result = SolverResult(
+          status: ((cancellation?.cancelled ?? false) || local.timedOut)
+              ? SolverStatus.searchLimitReached
+              : result.status,
+          positions: local.positions,
+          visitedStates: result.visitedStates,
+          elapsedMilliseconds:
+              result.elapsedMilliseconds + local.elapsedMilliseconds,
+          firstFeasibleMilliseconds: result.firstFeasibleMilliseconds,
+          proofMilliseconds: changed ? null : result.proofMilliseconds,
+          optimalityProven:
+              !changed && !local.timedOut && result.optimalityProven,
+          infeasibilityProven: result.infeasibilityProven,
+          realSeniorInfeasibilityProven: result.realSeniorInfeasibilityProven,
+          cancelled: cancellation?.cancelled ?? false,
+          message: local.timedOut
+              ? 'Yerel iyileştirme zaman aşımında durdu; sonuç kısmidir.'
+              : result.message,
+          vacancies: result.vacancies,
+        );
+      }
+    }
     return FairnessResult(
       result,
       result.hasValidIncumbent ? FairnessReport(m, result.positions) : null,
+      localRepair: localRepair,
     );
   }
 }
