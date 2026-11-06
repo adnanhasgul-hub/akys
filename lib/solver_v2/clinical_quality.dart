@@ -85,6 +85,7 @@ class ClinicalQualityEvaluator {
     final perDay = List.generate(problem.slotsPerDay.length, (_) => <int>[]);
     for (var i = 0; i < solution.assignments.length; i++) {
       final doctor = solution.assignments[i], day = days[i];
+      if (doctor == unfilledSlot) continue;
       counts[doctor]++;
       perDay[day].add(doctor);
       points[doctor] += problem.dayDifficulties![day].effectiveScore;
@@ -100,9 +101,11 @@ class ClinicalQualityEvaluator {
           .length;
       if (juniors >= 1) coverage++;
       if (juniors >= 2) doubleJunior++;
-      if (assigned.length == 1 &&
-          problem.doctors[assigned.single].group == DutyGroup.senior) {
-        solo[problem.doctors[assigned.single].seniorityLevel!.index]++;
+      final seniors = assigned
+          .where((id) => problem.doctors[id].group == DutyGroup.senior)
+          .toList();
+      if (seniors.length == 1) {
+        solo[problem.doctors[seniors.single].seniorityLevel!.index]++;
       }
     }
     List<int> group(DutyGroup g) => [

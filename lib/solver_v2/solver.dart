@@ -4,6 +4,11 @@ enum DutyGroup { senior, junior }
 
 enum DutyRole { senior, junior }
 
+enum SlotRequirement { required, optional }
+
+/// Sentinel used only for an unfilled optional slot.
+const int unfilledSlot = -1;
+
 enum SeniorityLevel { k1, k2, k3, k4 }
 
 class Doctor {
@@ -67,11 +72,19 @@ class Problem {
     required List<int> slotsPerDay,
     this.startDate,
     List<DutyRole>? slotRoles,
+    List<SlotRequirement>? slotRequirements,
     List<DayDifficulty>? dayDifficulties,
     this.clinicMaxDuties = 8,
   }) : doctors = List.unmodifiable(doctors),
        slotsPerDay = List.unmodifiable(slotsPerDay),
        slotRoles = slotRoles == null ? null : List.unmodifiable(slotRoles),
+       slotRequirements = List.unmodifiable(
+         slotRequirements ??
+             List.filled(
+               slotsPerDay.fold<int>(0, (a, b) => a + b),
+               SlotRequirement.required,
+             ),
+       ),
        dayDifficulties = dayDifficulties == null
            ? null
            : List.unmodifiable(dayDifficulties) {
@@ -97,6 +110,9 @@ class Problem {
               d.maxDuties > clinicMaxDuties ||
               d.must.any((day) => day >= slotsPerDay.length),
         ) ||
+        (slotRequirements != null &&
+            slotRequirements.length !=
+                slotsPerDay.fold<int>(0, (a, b) => a + b)) ||
         (slotRoles != null &&
             slotRoles.length != slotsPerDay.fold<int>(0, (a, b) => a + b)) ||
         (startDate != null &&
@@ -126,6 +142,7 @@ class Problem {
   final List<int> slotsPerDay;
   final DateTime? startDate;
   final List<DutyRole>? slotRoles;
+  final List<SlotRequirement> slotRequirements;
   final List<DayDifficulty>? dayDifficulties;
   final int clinicMaxDuties;
   DateTime dateForDay(int day) {
@@ -168,6 +185,7 @@ class Problem {
     'startDate': startDate?.toIso8601String() ?? '',
     'slotRoles': slotRoles?.map((r) => r.name).toList() ?? <String>[],
     'hasSlotRoles': slotRoles != null,
+    'slotRequirements': slotRequirements.map((r) => r.name).toList(),
     'clinicMaxDuties': clinicMaxDuties,
     'hasDayDifficulties': dayDifficulties != null,
     'dayDifficulties':
@@ -204,6 +222,9 @@ class Problem {
               .toList()
         : null,
     clinicMaxDuties: data['clinicMaxDuties'] as int? ?? 8,
+    slotRequirements: (data['slotRequirements'] as List?)
+        ?.map((r) => SlotRequirement.values.byName(r as String))
+        .toList(),
     dayDifficulties: data['hasDayDifficulties'] == true
         ? [
             for (final raw in data['dayDifficulties'] as List)
@@ -267,11 +288,19 @@ class SearchSession {
   SearchSession(this.problem, {this.enablePruning = true})
     : _allowSubstitution = false,
       _days = problem.slotDays,
-      _next = List.filled(problem.slotDays.length + 1, 0);
+      _next = List.filled(problem.slotDays.length + 1, 0) {
+    if (problem.slotRequirements.contains(SlotRequirement.optional)) {
+      throw UnsupportedError('Optional slots are not supported by search');
+    }
+  }
   SearchSession._substitution(this.problem, {this.enablePruning = true})
     : _allowSubstitution = true,
       _days = problem.slotDays,
-      _next = List.filled(problem.slotDays.length + 1, 0);
+      _next = List.filled(problem.slotDays.length + 1, 0) {
+    if (problem.slotRequirements.contains(SlotRequirement.optional)) {
+      throw UnsupportedError('Optional slots are not supported by search');
+    }
+  }
   final Problem problem;
   final bool enablePruning;
   final bool _allowSubstitution;

@@ -90,7 +90,7 @@ void main() {
       '-1',
       '-1',
       '0',
-      '0',
+      '-1',
     ]);
     expect(
       evaluator.evaluate(p, solution(p, [0, 4, 5, 3, 2])).components,

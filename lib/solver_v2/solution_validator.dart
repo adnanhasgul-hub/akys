@@ -35,6 +35,12 @@ class SolutionValidator {
     final dates = <int, List<int>>{};
     for (var slot = 0; slot < solution.assignments.length; slot++) {
       final id = solution.assignments[slot];
+      if (id == unfilledSlot && slot < days.length) {
+        if (problem.slotRequirements[slot] == SlotRequirement.required) {
+          errors.add('Zorunlu pozisyon boş: slot $slot.');
+        }
+        continue;
+      }
       if (id < 0 || id >= problem.doctors.length) {
         errors.add('Geçersiz hekim indeksi: $id (slot $slot).');
         continue;

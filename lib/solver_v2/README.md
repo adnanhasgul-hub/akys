@@ -156,10 +156,11 @@ has 19 components; all are minimized, and comparison is lexicographic:
 1. Q1: number of junior doctors assigned to senior positions.
 2. Q2–Q3: negative number of days with at least one, then at least two, doctors
    whose persistent group is junior (including a temporary senior-position holder).
-3. Q4: negative counts of solo senior days for K4, K3, K2, K1, in that order.
-   Narrow interpretation: the only person assigned on the day is a senior;
-   days with a senior paired with any other person are not solo days. Doctors
-   of equal K-level are aggregated, with no within-level objective.
+3. Q4: negative counts of days with exactly one senior-group doctor for K4,
+   K3, K2, K1, in that order. Any number of junior-group doctors may also work
+   that day. Two senior-group doctors make the day ineligible. Persistent group,
+   not a temporary role, determines whether a doctor is senior. Doctors of equal
+   K-level are aggregated, with no within-level objective.
 4. Q5: for Saturday, Friday, Sunday, Thursday in that order, two values each:
    maximum of the senior/junior within-group count ranges, then their sum.
 5. Q6: each doctor's duty count divided by their personal maximum, with each
@@ -183,5 +184,28 @@ existing prototype-quality consistency check. It never grants persistent approva
 for a local-only substitution. This stage does not integrate the clinical vector
 into `SearchSession`, alter its prototype objective, or add/change branch-and-
 bound. In particular, prototype objective bounds must be reconsidered before
-1.4C uses the new vector. Fixed required slot counts and roles constrain which
-coverage/second-junior alternatives can exist; optional slots are not modeled.
+1.4C uses the new vector. Fixed slot counts and roles constrain which coverage/second-junior alternatives
+can exist; stage 1.4B.1 adds optional slot representation as described below.
+
+
+## Stage 1.4B.1: optional slot model (validation only)
+
+`slotRequirements` contains one `SlotRequirement.required` or `.optional` entry
+per slot, in the same order as roles. Old messages without this field restore all
+slots as required. The exact sentinel `unfilledSlot` (`-1`) means an unfilled
+optional slot; a missing assignment, `-1` in a required slot, and all other
+negative or out-of-range indices are invalid. Filled optional slots count as
+ordinary duties and undergo the same role, rest, previous-month boundary, must,
+cannot and capacity checks. Quality ignores unfilled slots and counts filled
+ones normally. These requirements are included in the immutable snapshot and its
+message round-trip.
+
+**Search is not yet optional-slot aware.** Both public `SearchSession` and the
+private substitution search reject any problem containing optional slots with
+`UnsupportedError` before search. `TransitionSession` therefore rejects such a
+snapshot before it can establish a phase-A proof. This fail-closed boundary is
+intentional: an all-filled search cannot prove an optional-slot problem
+infeasible. Stage 1.4C must extend DFS branches and bounds for vacancies and
+reverify A/B proof security before enabling search. The existing prototype quality
+is still checked by `SolutionValidator` using filled assignments only; clinical
+quality remains independent and is not the search objective.
