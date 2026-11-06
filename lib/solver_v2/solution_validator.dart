@@ -1,18 +1,30 @@
 import 'solver.dart';
 
 class ValidationResult {
-  ValidationResult(List<String> errors, List<int>? quality)
-    : errors = List.unmodifiable(errors),
-      quality = quality == null ? null : List.unmodifiable(quality);
+  ValidationResult(
+    List<String> errors,
+    List<int>? quality, {
+    this.substitutionCount = 0,
+  }) : errors = List.unmodifiable(errors),
+       quality = quality == null ? null : List.unmodifiable(quality);
   final List<String> errors;
   final List<int>? quality;
+  final int substitutionCount;
+
+  /// Substitution evidence is process-local and never an authorization to persist.
+  bool get permanentApprovalAllowed => isValid && substitutionCount == 0;
   bool get isValid => errors.isEmpty;
 }
 
 /// Independent of the search implementation and its incremental checks.
 class SolutionValidator {
   const SolutionValidator();
-  ValidationResult validate(Problem problem, Solution solution) {
+  ValidationResult validate(
+    Problem problem,
+    Solution solution, {
+    TransitionSession? localEvidence,
+  }) {
+    var substitutions = 0;
     final errors = <String>[], days = problem.slotDays;
     if (solution.assignments.length != days.length) {
       errors.add(
@@ -34,7 +46,11 @@ class SolutionValidator {
         errors.add('${doctor.id}: pozisyon için uygun değil.');
       }
       if (role == DutyRole.senior && doctor.group != DutyGroup.senior) {
-        errors.add('${doctor.id}: kanıtlanmamış kıdemsiz geçişi yasak.');
+        substitutions++;
+        if (localEvidence == null ||
+            !localEvidence.verifiesLocalTransition(problem, solution)) {
+          errors.add('${doctor.id}: kanıtlanmamış kıdemsiz geçişi yasak.');
+        }
       }
       if (role == DutyRole.junior && doctor.group != DutyGroup.junior) {
         errors.add('${doctor.id}: kıdemsiz pozisyonu için grup uygun değil.');
@@ -70,9 +86,12 @@ class SolutionValidator {
         }
       }
     }
-    if (errors.isNotEmpty) return ValidationResult(errors, null);
+    if (errors.isNotEmpty) {
+      return ValidationResult(errors, null, substitutionCount: substitutions);
+    }
     final sorted = [...counts]..sort();
     final quality = [
+      if (substitutions > 0) substitutions,
       sorted.isEmpty ? 0 : sorted.last - sorted.first,
       counts.fold<int>(0, (a, b) => a + b * b),
     ];
@@ -83,6 +102,6 @@ class SolutionValidator {
         ).any((same) => !same)) {
       errors.add('Bildirilen kalite vektörü hesaplanan değerle eşleşmiyor.');
     }
-    return ValidationResult(errors, quality);
+    return ValidationResult(errors, quality, substitutionCount: substitutions);
   }
 }

@@ -152,7 +152,7 @@ class Problem {
   );
 }
 
-class Solution {
+final class Solution {
   Solution(List<int> assignments, List<int> quality)
     : assignments = List.unmodifiable(assignments),
       quality = List.unmodifiable(quality);
@@ -174,7 +174,7 @@ enum SearchStatus {
   cancelled,
 }
 
-enum PauseReason { nodeBudget, deadline }
+enum PauseReason { nodeBudget, deadline, stageTransition }
 
 class SearchResult {
   const SearchResult(
@@ -200,10 +200,16 @@ class SearchResult {
 /// Kept in memory; stepping is synchronous and must be run off the UI thread.
 class SearchSession {
   SearchSession(this.problem, {this.enablePruning = true})
-    : _days = problem.slotDays,
+    : _allowSubstitution = false,
+      _days = problem.slotDays,
+      _next = List.filled(problem.slotDays.length + 1, 0);
+  SearchSession._substitution(this.problem, {this.enablePruning = true})
+    : _allowSubstitution = true,
+      _days = problem.slotDays,
       _next = List.filled(problem.slotDays.length + 1, 0);
   final Problem problem;
   final bool enablePruning;
+  final bool _allowSubstitution;
   final List<int> _days, _next;
   final List<int> _prefix = [];
   Solution? _best;
@@ -219,7 +225,9 @@ class SearchSession {
     final role = problem.slotRoles?[depth];
     if (role != null &&
         (!d.eligibleRoles.contains(role) ||
-            (role == DutyRole.senior && d.group != DutyGroup.senior) ||
+            (role == DutyRole.senior &&
+                d.group != DutyGroup.senior &&
+                !_allowSubstitution) ||
             (role == DutyRole.junior && d.group != DutyGroup.junior))) {
       return false;
     }
@@ -254,7 +262,7 @@ class SearchSession {
       capacity += problem.doctors[i].maxDuties - counts[i];
     }
     if (capacity < remaining) return true;
-    if (_best == null || counts.isEmpty) return false;
+    if (_best == null || counts.isEmpty || _allowSubstitution) return false;
     final total = _days.length;
     final maxCurrent = counts.reduce((a, b) => a > b ? a : b);
     final lowerRange = (maxCurrent - total ~/ counts.length).clamp(0, total);
@@ -287,6 +295,17 @@ class SearchSession {
     }
     final sorted = [...counts]..sort();
     final q = [
+      if (_allowSubstitution)
+        for (final n in [
+          List.generate(_prefix.length, (i) => i)
+              .where(
+                (i) =>
+                    problem.slotRoles?[i] == DutyRole.senior &&
+                    problem.doctors[_prefix[i]].group == DutyGroup.junior,
+              )
+              .length,
+        ])
+          n,
       if (sorted.isEmpty) 0 else sorted.last - sorted.first,
       counts.fold<int>(0, (sum, n) => sum + n * n),
     ];
@@ -386,5 +405,113 @@ class SearchSession {
         }
       }
     }
+  }
+}
+
+/// Process-local two-phase capability. A client-provided serialized claim cannot
+/// construct the private phase-B engine or change a completed phase-A verdict.
+enum TransitionPhase { restricted, substitution, done }
+
+enum RestrictedVerdict { pending, feasible, provenInfeasible, cancelled }
+
+final class TransitionSession {
+  TransitionSession(Problem input, {this.enablePruning = true})
+    : problem = Problem.fromMessage(input.toMessage()) {
+    if (problem.startDate == null || problem.slotRoles == null) {
+      throw ArgumentError('Clinical date and roles required');
+    }
+    _restricted = SearchSession(problem, enablePruning: enablePruning);
+  }
+  final Problem problem;
+  final bool enablePruning;
+  late final SearchSession _restricted;
+  SearchSession? _substitution;
+  RestrictedVerdict _verdict = RestrictedVerdict.pending;
+  RestrictedVerdict get restrictedVerdict => _verdict;
+  TransitionPhase get phase => _substitution == null
+      ? (_verdict == RestrictedVerdict.pending
+            ? TransitionPhase.restricted
+            : TransitionPhase.done)
+      : (_phaseBDone ? TransitionPhase.done : TransitionPhase.substitution);
+  bool _phaseBDone = false;
+  bool _cancelled = false;
+  void cancel() {
+    _cancelled = true;
+    _restricted.cancel();
+    _substitution?.cancel();
+    if (_verdict == RestrictedVerdict.pending) {
+      _verdict = RestrictedVerdict.cancelled;
+    }
+  }
+
+  SearchResult run({required int maxNodes, Duration? timeLimit}) {
+    if (_cancelled) {
+      return SearchResult(
+        SearchStatus.cancelled,
+        _substitution?.best ?? _restricted.best,
+        _substitution?.visitedNodes ?? _restricted.visitedNodes,
+      );
+    }
+    if (_substitution != null) {
+      final result = _substitution!.run(
+        maxNodes: maxNodes,
+        timeLimit: timeLimit,
+      );
+      if (result.status == SearchStatus.optimal ||
+          result.status == SearchStatus.infeasible) {
+        _phaseBDone = true;
+      }
+      return result;
+    }
+    if (_verdict == RestrictedVerdict.feasible ||
+        _verdict == RestrictedVerdict.provenInfeasible) {
+      throw StateError('Restricted stage already complete');
+    }
+    final result = _restricted.run(maxNodes: maxNodes, timeLimit: timeLimit);
+    if (result.best != null) {
+      _verdict = RestrictedVerdict.feasible;
+      return SearchResult(
+        result.status == SearchStatus.optimal
+            ? SearchStatus.optimal
+            : SearchStatus.feasibleNotProven,
+        result.best,
+        result.visitedNodes,
+      );
+    }
+    if (result.status == SearchStatus.infeasible) {
+      _verdict = RestrictedVerdict.provenInfeasible;
+      _substitution = SearchSession._substitution(
+        problem,
+        enablePruning: enablePruning,
+      );
+      return SearchResult(
+        SearchStatus.paused,
+        null,
+        result.visitedNodes,
+        pauseReason: PauseReason.stageTransition,
+      );
+    }
+    return result;
+  }
+
+  /// Process-local check only: not a portable certificate, and never authorizes
+  /// durable writes. Bind both the exact snapshot and phase-B assignment.
+  bool verifiesLocalTransition(Problem snapshot, Solution solution) {
+    if (!identical(snapshot, problem) ||
+        _verdict != RestrictedVerdict.provenInfeasible ||
+        _substitution?.best == null) {
+      return false;
+    }
+    final b = _substitution!.best!;
+    return b.assignments.length == solution.assignments.length &&
+        b.quality.length == solution.quality.length &&
+        List.generate(
+          b.assignments.length,
+          (i) => b.assignments[i] == solution.assignments[i],
+        ).every((v) => v) &&
+        List.generate(
+          b.quality.length,
+          (i) => b.quality[i] == solution.quality[i],
+        ).every((v) => v);
   }
 }

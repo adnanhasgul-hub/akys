@@ -79,18 +79,45 @@ checked using UTC calendar differences, and all earlier hard checks still apply.
 The independent validator separately applies these restrictions and checks all
 must duties, including on manually constructed assignments.
 
-**Junior-to-senior substitution is NOT implemented.** The restricted search can
-prove infeasibility, but there is no independently verifiable proof artifact or
-trusted two-phase authorization in the current model. Neither a boolean nor a
-serialized status is accepted as proof; the validator rejects junior assignments
-to senior slots unconditionally, including after a restricted infeasible result.
-Timeout or node budget is not a proof. To enable the feature safely, add a
-problem-bound, independently checkable unsatisfiability certificate or a trusted
-verifier that replays the complete restricted search, then implement a separate
-substitution-minimizing phase bound to the validated certificate. Until then this
-is a conservative, incomplete clinical prototype, not production-ready.
+## Stage 1.3B: two-phase local substitution protocol
 
-Other missing decisions include substitution minimization, complete K-level
+`TransitionSession` deep-copies the problem through its primitive message model
+and exposes the resulting immutable snapshot as `session.problem`. It requires a
+clinical start date and explicit slot roles. Phase A runs the exact restricted
+solver: if it finds any valid schedule, its immutable verdict is `feasible` and
+phase B remains closed. Only complete restricted exhaustion without a solution
+sets `provenInfeasible` and creates the private phase-B search. A deadline or node
+budget without a solution remains pending; cancellation closes the session.
+`PauseReason.stageTransition` distinguishes phase completion from a node limit.
+Both frontiers are retained in memory across calls.
+
+Phase B permits an otherwise eligible junior in a senior slot. It minimizes the
+number of such assignments as the first quality component, followed by the
+existing prototype balance vector. Capacity pruning is retained; objective
+pruning is disabled in phase B because the previous bounds do not include this
+new first component. Complete search proves the minimum; time/budget interruption
+only returns the current valid incumbent without an optimality claim.
+
+The `final` process-local session encapsulates the actual restricted search,
+immutable verdict and private B engine. `SolutionValidator.validate` accepts a
+junior senior-slot assignment only when its optional local evidence is the real
+session, the exact `session.problem` object is used, and the solution matches
+that session's current B incumbent. It independently verifies assignment hard
+constraints, substitution count and the entire reported quality vector. An
+identical reconstructed or modified problem is a different snapshot and fails
+this capability check. A forged serialized `proved` flag is not an input.
+
+This is not an independently portable proof certificate. The local session
+trusts the correctness of the in-process restricted enumerator, and a compromised
+client process cannot establish a trustworthy Firestore/server proof. The
+validator's `permanentApprovalAllowed` is false for any substitution solution,
+even if locally valid; no persistence or server authorization is implemented.
+A production system needs a trusted server-side verifier that replays phase A or
+validates an independently checkable, problem-bound unsatisfiability certificate.
+Cancellation and timeout do not prove infeasibility. Search remains synchronous,
+exponential, and in-memory; Web Worker integration is unverified.
+
+Other missing decisions include complete K-level
 hierarchy and ranking semantics, junior vacancy policy, advanced fairness and
 difficulty, real clinical snapshot migration, persistent checkpoints and
 worker/isolate integration. The synthetic benchmark is not a clinical-scale
