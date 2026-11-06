@@ -84,8 +84,8 @@ must duties, including on manually constructed assignments.
 `TransitionSession` deep-copies the problem through its primitive message model
 and exposes the resulting immutable snapshot as `session.problem`. It requires a
 clinical start date and explicit slot roles. Phase A runs the exact restricted
-solver: if it finds any valid schedule, its immutable verdict is `feasible` and
-phase B remains closed. Only complete restricted exhaustion without a solution
+solver: if it finds any valid schedule, its verdict becomes `feasible` and
+phase B remains closed while optimization continues. Only complete restricted exhaustion without a solution
 sets `provenInfeasible` and creates the private phase-B search. A deadline or node
 budget without a solution remains pending; cancellation closes the session.
 `PauseReason.stageTransition` distinguishes phase completion from a node limit.
@@ -122,3 +122,17 @@ hierarchy and ranking semantics, junior vacancy policy, advanced fairness and
 difficulty, real clinical snapshot migration, persistent checkpoints and
 worker/isolate integration. The synthetic benchmark is not a clinical-scale
 performance claim.
+
+## Stage 1.4A: restricted phase optimizes
+
+Phase A uses the existing `SearchSession` optimize behavior; there is no separate
+feasibility-only mode. Finding an incumbent sets `RestrictedVerdict.feasible`,
+which permanently prevents phase B for this session, but the phase stays
+`restricted` until the frontier is exhausted. `feasibleNotProven` plus a pause
+reason retains the incumbent and frontier; resuming does not revisit completed
+branches. Only exhaustion returns `optimal`. Timeout or cancellation after an
+incumbent retains it without converting the result into an infeasibility proof.
+If there is no incumbent, only complete restricted exhaustion opens phase B;
+node/time limits and cancellation never do so. Existing capacity and prototype
+quality lower-bound pruning are unchanged. No new clinical quality objective or
+clinical objective pruning is implemented in this stage.

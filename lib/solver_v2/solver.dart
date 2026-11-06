@@ -429,10 +429,13 @@ final class TransitionSession {
   RestrictedVerdict _verdict = RestrictedVerdict.pending;
   RestrictedVerdict get restrictedVerdict => _verdict;
   TransitionPhase get phase => _substitution == null
-      ? (_verdict == RestrictedVerdict.pending
-            ? TransitionPhase.restricted
-            : TransitionPhase.done)
-      : (_phaseBDone ? TransitionPhase.done : TransitionPhase.substitution);
+      ? (_restrictedDone || _cancelled
+            ? TransitionPhase.done
+            : TransitionPhase.restricted)
+      : (_phaseBDone || _cancelled
+            ? TransitionPhase.done
+            : TransitionPhase.substitution);
+  bool _restrictedDone = false;
   bool _phaseBDone = false;
   bool _cancelled = false;
   void cancel() {
@@ -463,20 +466,11 @@ final class TransitionSession {
       }
       return result;
     }
-    if (_verdict == RestrictedVerdict.feasible ||
-        _verdict == RestrictedVerdict.provenInfeasible) {
-      throw StateError('Restricted stage already complete');
-    }
     final result = _restricted.run(maxNodes: maxNodes, timeLimit: timeLimit);
     if (result.best != null) {
       _verdict = RestrictedVerdict.feasible;
-      return SearchResult(
-        result.status == SearchStatus.optimal
-            ? SearchStatus.optimal
-            : SearchStatus.feasibleNotProven,
-        result.best,
-        result.visitedNodes,
-      );
+      if (result.status == SearchStatus.optimal) _restrictedDone = true;
+      return result;
     }
     if (result.status == SearchStatus.infeasible) {
       _verdict = RestrictedVerdict.provenInfeasible;
