@@ -1,3 +1,5 @@
+import 'clinical_quality.dart';
+
 /// Standalone, exact enumerator for small synthetic schedules.
 /// Day numbers are consecutive calendar-day indices starting at zero.
 enum DutyGroup { senior, junior }
@@ -11,7 +13,7 @@ const int unfilledSlot = -1;
 
 enum SeniorityLevel { k1, k2, k3, k4 }
 
-class Doctor {
+final class Doctor {
   Doctor({
     required this.id,
     this.maxDuties = 8,
@@ -66,7 +68,7 @@ final class DayDifficulty {
   };
 }
 
-class Problem {
+final class Problem {
   Problem({
     required List<Doctor> doctors,
     required List<int> slotsPerDay,
@@ -94,6 +96,11 @@ class Problem {
         clinicMaxDuties < 0 ||
         (dayDifficulties != null &&
             (startDate == null ||
+                slotRoles == null ||
+                doctors.any(
+                  (d) =>
+                      d.group == DutyGroup.senior && d.seniorityLevel == null,
+                ) ||
                 dayDifficulties.length != slotsPerDay.length ||
                 dayDifficulties.any(
                   (d) =>
@@ -255,18 +262,33 @@ final class PrototypeQuality {
 }
 
 final class Solution {
-  Solution(List<int> assignments, List<int> quality)
+  Solution(List<int> assignments, List<int> quality, {this.clinicalQuality})
     : assignments = List.unmodifiable(assignments),
       prototypeQuality = PrototypeQuality(quality);
 
-  /// Doctor indices in slot order. Quality: load range, then sum of squared loads.
+  /// Doctor indices in slot order. `quality` is legacy prototype data only;
+  /// the active clinical objective, when present, is `clinicalQuality`.
   final List<int> assignments;
   final PrototypeQuality prototypeQuality;
+
+  /// The active objective for clinical snapshots; [quality] stays prototype-only.
+  final ClinicalQuality? clinicalQuality;
   List<int> get quality => prototypeQuality.values;
   Map<String, Object> toMessage() => {
     'assignments': assignments,
     'quality': quality,
+    if (clinicalQuality != null)
+      'clinicalQuality': clinicalQuality!.toMessage(),
   };
+  factory Solution.fromMessage(Map<String, dynamic> data) => Solution(
+    List<int>.from(data['assignments'] as List),
+    List<int>.from(data['quality'] as List),
+    clinicalQuality: data['clinicalQuality'] == null
+        ? null
+        : ClinicalQuality.fromMessage(
+            Map<String, dynamic>.from(data['clinicalQuality'] as Map),
+          ),
+  );
 }
 
 enum SearchStatus {
@@ -304,16 +326,25 @@ class SearchResult {
 /// Kept in memory; stepping is synchronous and must be run off the UI thread.
 class SearchSession {
   SearchSession(this.problem, {this.enablePruning = true})
-    : _allowSubstitution = false,
+    : _phaseBOwner = null,
+      _allowSubstitution = false,
       _days = problem.slotDays,
       _next = List.filled(problem.slotDays.length + 1, 0);
-  SearchSession._substitution(this.problem, {this.enablePruning = true})
-    : _allowSubstitution = true,
-      _days = problem.slotDays,
-      _next = List.filled(problem.slotDays.length + 1, 0);
+  SearchSession._substitution(
+    this.problem, {
+    this.enablePruning = true,
+    required TransitionSession owner,
+  }) : _phaseBOwner = owner,
+       _allowSubstitution = true,
+       _days = problem.slotDays,
+       _next = List.filled(problem.slotDays.length + 1, 0);
   final Problem problem;
   final bool enablePruning;
   final bool _allowSubstitution;
+  final TransitionSession? _phaseBOwner;
+
+  /// Legacy snapshots without scoring metadata retain the prototype objective.
+  bool get usesClinicalQuality => problem.dayDifficulties != null;
   final List<int> _days, _next;
   final List<int> _prefix = [];
   Solution? _best;
@@ -372,7 +403,8 @@ class SearchSession {
     if (capacity < requiredRemaining) return true;
     // With optional slots, final assigned total is not fixed. Stage-1.2 load
     // bounds assume every remaining slot is filled and are therefore disabled.
-    if (problem.slotRequirements.contains(SlotRequirement.optional) ||
+    if (usesClinicalQuality ||
+        problem.slotRequirements.contains(SlotRequirement.optional) ||
         _best == null ||
         counts.isEmpty ||
         _allowSubstitution) {
@@ -425,8 +457,21 @@ class SearchSession {
       if (sorted.isEmpty) 0 else sorted.last - sorted.first,
       counts.fold<int>(0, (sum, n) => sum + n * n),
     ];
-    if (_best == null || _better(q, _best!.quality)) {
-      _best = Solution(_prefix, q);
+    final candidate = Solution(_prefix, q);
+    if (usesClinicalQuality) {
+      final evaluator = const ClinicalQualityEvaluator();
+      final clinical = _allowSubstitution
+          ? evaluator.evaluatePhaseBCandidate(
+              problem,
+              candidate,
+              session: _phaseBOwner!,
+            )
+          : evaluator.evaluate(problem, candidate);
+      if (_best == null || clinical.compareTo(_best!.clinicalQuality!) < 0) {
+        _best = Solution(_prefix, q, clinicalQuality: clinical);
+      }
+    } else if (_best == null || _better(q, _best!.quality)) {
+      _best = candidate;
     }
   }
 
@@ -597,6 +642,7 @@ final class TransitionSession {
       _substitution = SearchSession._substitution(
         problem,
         enablePruning: enablePruning,
+        owner: this,
       );
       return SearchResult(
         SearchStatus.paused,

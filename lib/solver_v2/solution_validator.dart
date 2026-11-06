@@ -1,3 +1,4 @@
+import 'clinical_quality.dart';
 import 'solver.dart';
 
 class ValidationResult {
@@ -26,7 +27,37 @@ class SolutionValidator {
     Problem problem,
     Solution solution, {
     TransitionSession? localEvidence,
-  }) => _validate(problem, solution, localEvidence: localEvidence);
+  }) {
+    final result = _validate(problem, solution, localEvidence: localEvidence);
+    if (!result.isValid || solution.clinicalQuality == null) return result;
+    final bare = Solution(solution.assignments, solution.quality);
+    try {
+      final expected = const ClinicalQualityEvaluator().evaluate(
+        problem,
+        bare,
+        localEvidence: localEvidence,
+      );
+      if (solution.clinicalQuality!.components.length !=
+              expected.components.length ||
+          expected.compareTo(solution.clinicalQuality!) != 0) {
+        return ValidationResult(
+          [
+            ...result.errors,
+            'Bildirilen klinik kalite hesaplanan vektörle eşleşmiyor.',
+          ],
+          result.quality,
+          substitutionCount: result.substitutionCount,
+        );
+      }
+    } on ArgumentError catch (error) {
+      return ValidationResult(
+        [...result.errors, 'Klinik kalite doğrulanamadı: $error'],
+        result.quality,
+        substitutionCount: result.substitutionCount,
+      );
+    }
+    return result;
+  }
 
   /// Checks a candidate only in a genuine active phase B; never grants approval.
   ValidationResult validatePhaseBCandidate(

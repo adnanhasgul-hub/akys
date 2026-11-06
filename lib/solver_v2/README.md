@@ -1,4 +1,4 @@
-# AKYS V2 solver core — stage 1.2 prototype
+# AKYS V2 solver core — stage 1.4C.2 prototype
 
 This module is independent of Flutter and Firebase. `Doctor`, `Problem`, and
 `Solution` are immutable snapshots. `Problem.toMessage`/`fromMessage` and
@@ -93,8 +93,9 @@ Both frontiers are retained in memory across calls.
 
 Phase B permits an otherwise eligible junior in a senior slot. It minimizes the
 number of such assignments as the first quality component, followed by the
-existing prototype balance vector. Capacity pruning is retained; objective
-pruning is disabled in phase B because the previous bounds do not include this
+existing lower-priority objective. For legacy snapshots without daily scores it
+is the prototype balance vector; clinical snapshots use the stage 1.4C.2 vector.
+Capacity pruning is retained; objective pruning is disabled in phase B because the previous bounds do not include this
 new first component. Complete search proves the minimum; time/budget interruption
 only returns the current valid incumbent without an optimality claim.
 
@@ -181,10 +182,8 @@ holidays do not replace its category.
 
 The evaluator checks validity through the independent validator, including its
 existing prototype-quality consistency check. It never grants persistent approval
-for a local-only substitution. This stage does not integrate the clinical vector
-into `SearchSession`, alter its prototype objective, or add/change branch-and-
-bound. In particular, prototype objective bounds must be reconsidered before
-1.4C uses the new vector. Fixed slot counts and roles constrain which coverage/second-junior alternatives
+for a local-only substitution. Stage 1.4B itself did not integrate the clinical
+vector into search; see stage 1.4C.2 below for the subsequent integration. Fixed slot counts and roles constrain which coverage/second-junior alternatives
 can exist; stage 1.4B.1 adds optional slot representation as described below.
 
 
@@ -214,10 +213,9 @@ Capacity pruning compares remaining available capacity with the number of
 remaining **required** slots only. Because the eventual total assigned duties
 can vary, the fixed-total load range and squared-load objective bounds are
 **disabled for the entire search whenever any optional slot exists**. In
-phase B only the safe capacity bound is used. No 19-component clinical objective
-is connected to the search. The prototype balance quality counts filled duties
-only and can therefore favor leaving optional slots empty; it is not the clinical
-coverage objective.
+phase B only the safe capacity bound is used. For legacy snapshots without daily
+scores, prototype balance quality counts filled duties only and can favor leaving
+optional slots empty. Clinical snapshots use the stage 1.4C.2 objective below.
 
 A/B frontiers, node budgets, pauses and timeouts include vacancy candidates.
 The independent validator still validates required and filled optional slots,
@@ -259,6 +257,46 @@ unchanged in this stage. A caller cannot turn candidate quality into a durable
 approval through these APIs. A/B authorization is still process-local, relies on
 the in-process search implementation, is not a portable proof certificate, and
 is not trustworthy against a compromised client. A server verifier is still
-required before persistence of transitional schedules. The next stage must wire
-candidate scoring into the search without exposing unchecked proof bypasses and
-must disable or re-prove the prototype objective bounds.
+required before persistence of transitional schedules. Stage 1.4C.2 below wires
+candidate scoring into search and disables the prototype objective bounds.
+
+
+## Stage 1.4C.2: active clinical objective
+
+For a clinical snapshot (`dayDifficulties` present), `Problem` requires UTC
+start date, explicit roles and K-levels for all senior doctors. Each completed
+candidate is independently validated and scored using `ClinicalQualityEvaluator`.
+A restricted candidate uses normal validation; a phase-B candidate uses the
+proof-bound active-session candidate path. The first valid candidate becomes the
+incumbent; a strictly smaller 19-component exact rational vector replaces it.
+An equal or worse candidate does not. `Solution.clinicalQuality` exposes the
+active 19 components; `Solution.quality` / `prototypeQuality` is retained solely
+for backwards-compatible validation and is not used in clinical comparisons.
+`Solution.toMessage` and `fromMessage` preserve both, with exact integer-string
+numerators and denominators for clinical fractions. The independent validator
+recalculates reported clinical quality; wrong or malformed reported vectors are
+rejected. The local phase-B proof capability and permanent approval prohibition
+remain unchanged.
+
+For all clinical snapshots, fixed-total prototype objective-bound pruning is
+disabled, even if every position is required. The capacity feasibility bound
+still counts remaining required slots only. No clinical objective bound is
+introduced. A search tree exhausted under those conditions proves the clinical
+optimum; a node budget/deadline retains only an unproven incumbent. A/B proof,
+optional vacancy enumeration, resumption and deterministic input-order ties
+are unchanged. Historical synthetic snapshots without daily scores retain the
+prototype-only objective for compatibility and never report a clinical vector.
+
+Linux VM, Flutter 3.47.9 / Dart 3.13.7, one un-warmed run: small (one senior,
+two juniors, one day, two slots) visited 7 candidates, found its first solution
+in 13 ms, completed in 17 ms and proved optimum. First vector:
+`[0,-1,0,-1,0,0,0,0,0,0,0,1,1,0,0,1,1,5,5]`; final:
+`[0,-1,0,-1,0,0,0,0,0,0,0,1,1,0,0,1/2,1/2,5,5]`.
+Medium (four seniors, three juniors, five days, ten slots) found its first
+solution in 2 ms and visited 2,041 candidates in 59 ms; it stopped at the test
+budget with `feasibleNotProven`. Its first vector was
+`[0,-5,0,0,-1,-2,-2,0,0,0,0,1,2,1,2,1/4,3/8,7,7]`; final incumbent:
+`[0,-5,0,-1,-1,-2,-1,0,0,0,0,1,2,1,2,1/8,1/4,6,7]`.
+These are single-run measurements affected by JIT and machine load, not a
+clinical-scale time guarantee. Search remains exponential and synchronous;
+no production UI, backend, worker or persistent proof integration is implied.
