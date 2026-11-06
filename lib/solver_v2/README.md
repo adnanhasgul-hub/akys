@@ -200,12 +200,32 @@ cannot and capacity checks. Quality ignores unfilled slots and counts filled
 ones normally. These requirements are included in the immutable snapshot and its
 message round-trip.
 
-**Search is not yet optional-slot aware.** Both public `SearchSession` and the
-private substitution search reject any problem containing optional slots with
-`UnsupportedError` before search. `TransitionSession` therefore rejects such a
-snapshot before it can establish a phase-A proof. This fail-closed boundary is
-intentional: an all-filled search cannot prove an optional-slot problem
-infeasible. Stage 1.4C must extend DFS branches and bounds for vacancies and
-reverify A/B proof security before enabling search. The existing prototype quality
-is still checked by `SolutionValidator` using filled assignments only; clinical
-quality remains independent and is not the search objective.
+## Stage 1.4C.1: optional-slot search
+
+DFS enumerates the existing doctor indices first, followed by `unfilledSlot`
+for an optional position; required positions never have a vacancy candidate.
+Vacancies count as visited candidates, do not count towards load, and are ignored
+when evaluating substitution counts and duty counts. Must-duty checks remain
+on complete leaves and can force an optional slot to be filled. Every occupied
+slot uses the existing hard checks. Both A and B enumerate optional vacancies;
+A still opens B only after the entire restricted search proves infeasibility.
+
+Capacity pruning compares remaining available capacity with the number of
+remaining **required** slots only. Because the eventual total assigned duties
+can vary, the fixed-total load range and squared-load objective bounds are
+**disabled for the entire search whenever any optional slot exists**. In
+phase B only the safe capacity bound is used. No 19-component clinical objective
+is connected to the search. The prototype balance quality counts filled duties
+only and can therefore favor leaving optional slots empty; it is not the clinical
+coverage objective.
+
+A/B frontiers, node budgets, pauses and timeouts include vacancy candidates.
+The independent validator still validates required and filled optional slots,
+and phase-B local evidence and the prohibition on permanent approval remain
+unchanged. Small generated mixed optional problems are compared against an
+independent exhaustive oracle with pruning on and off. A single un-warmed Linux
+VM run, Flutter 3.47.9 / Dart 3.13.7, three doctors and three slots (one required,
+two optional): baseline 51 nodes / 821 µs, pruning 51 nodes / 204 µs, both
+optimal with `[0, 3]`. Times are noisy and ordering/JIT-dependent; objective
+pruning is disabled here, so no general performance benefit is implied. These
+small results do not demonstrate clinical-scale performance.

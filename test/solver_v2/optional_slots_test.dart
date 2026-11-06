@@ -134,8 +134,11 @@ void main() {
         () => Problem(doctors: doctors, slotsPerDay: [1], slotRequirements: []),
         throwsArgumentError,
       );
-      expect(() => SearchSession(m), throwsUnsupportedError);
-      expect(() => TransitionSession(m), throwsUnsupportedError);
+      expect(
+        SearchSession(m).run(maxNodes: 10000).status,
+        SearchStatus.optimal,
+      );
+      expect(TransitionSession(m).run(maxNodes: 10000).best, isNotNull);
     },
   );
 }

@@ -288,19 +288,11 @@ class SearchSession {
   SearchSession(this.problem, {this.enablePruning = true})
     : _allowSubstitution = false,
       _days = problem.slotDays,
-      _next = List.filled(problem.slotDays.length + 1, 0) {
-    if (problem.slotRequirements.contains(SlotRequirement.optional)) {
-      throw UnsupportedError('Optional slots are not supported by search');
-    }
-  }
+      _next = List.filled(problem.slotDays.length + 1, 0);
   SearchSession._substitution(this.problem, {this.enablePruning = true})
     : _allowSubstitution = true,
       _days = problem.slotDays,
-      _next = List.filled(problem.slotDays.length + 1, 0) {
-    if (problem.slotRequirements.contains(SlotRequirement.optional)) {
-      throw UnsupportedError('Optional slots are not supported by search');
-    }
-  }
+      _next = List.filled(problem.slotDays.length + 1, 0);
   final Problem problem;
   final bool enablePruning;
   final bool _allowSubstitution;
@@ -348,15 +340,26 @@ class SearchSession {
   bool _prune() {
     final counts = List<int>.filled(problem.doctors.length, 0);
     for (final p in _prefix) {
-      counts[p]++;
+      if (p != unfilledSlot) counts[p]++;
     }
     final remaining = _days.length - _prefix.length;
+    final requiredRemaining = problem.slotRequirements
+        .skip(_prefix.length)
+        .where((r) => r == SlotRequirement.required)
+        .length;
     var capacity = 0;
     for (var i = 0; i < counts.length; i++) {
       capacity += problem.doctors[i].maxDuties - counts[i];
     }
-    if (capacity < remaining) return true;
-    if (_best == null || counts.isEmpty || _allowSubstitution) return false;
+    if (capacity < requiredRemaining) return true;
+    // With optional slots, final assigned total is not fixed. Stage-1.2 load
+    // bounds assume every remaining slot is filled and are therefore disabled.
+    if (problem.slotRequirements.contains(SlotRequirement.optional) ||
+        _best == null ||
+        counts.isEmpty ||
+        _allowSubstitution) {
+      return false;
+    }
     final total = _days.length;
     final maxCurrent = counts.reduce((a, b) => a > b ? a : b);
     final lowerRange = (maxCurrent - total ~/ counts.length).clamp(0, total);
@@ -385,7 +388,7 @@ class SearchSession {
   void _evaluate() {
     final counts = List<int>.filled(problem.doctors.length, 0);
     for (final p in _prefix) {
-      counts[p]++;
+      if (p != unfilledSlot) counts[p]++;
     }
     final sorted = [...counts]..sort();
     final q = [
@@ -395,6 +398,7 @@ class SearchSession {
               .where(
                 (i) =>
                     problem.slotRoles?[i] == DutyRole.senior &&
+                    _prefix[i] != unfilledSlot &&
                     problem.doctors[_prefix[i]].group == DutyGroup.junior,
               )
               .length,
@@ -471,7 +475,10 @@ class SearchSession {
         _prefix.removeLast();
         continue;
       }
-      if (_next[depth] >= problem.doctors.length) {
+      final candidateCount =
+          problem.doctors.length +
+          (problem.slotRequirements[depth] == SlotRequirement.optional ? 1 : 0);
+      if (_next[depth] >= candidateCount) {
         _next[depth] = 0;
         if (depth == 0) {
           _complete = true;
@@ -487,10 +494,11 @@ class SearchSession {
         }
         continue;
       }
-      final candidate = _next[depth]++;
+      final index = _next[depth]++;
+      final candidate = index == problem.doctors.length ? unfilledSlot : index;
       visitedNodes++;
       stepNodes++;
-      if (_allowed(candidate, depth)) {
+      if (candidate == unfilledSlot || _allowed(candidate, depth)) {
         _prefix.add(candidate);
         if (enablePruning && _prune()) {
           _prefix.removeLast();
