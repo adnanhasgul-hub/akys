@@ -337,6 +337,8 @@ class SearchSession {
     this.problem, {
     this.enablePruning = true,
     this.mode = OptimizationMode.clinical,
+    this.candidateOrdering = false,
+    this.earlyDeadEnds = false,
   }) : _phaseBOwner = null,
        _allowSubstitution = false,
        _days = problem.slotDays,
@@ -348,6 +350,8 @@ class SearchSession {
     this.enablePruning = true,
     required TransitionSession owner,
   }) : mode = owner.mode,
+       candidateOrdering = owner.candidateOrdering,
+       earlyDeadEnds = owner.earlyDeadEnds,
        _phaseBOwner = owner,
        _allowSubstitution = true,
        _days = problem.slotDays,
@@ -357,10 +361,56 @@ class SearchSession {
   final Problem problem;
   final bool enablePruning;
   final OptimizationMode mode;
+  final bool candidateOrdering, earlyDeadEnds;
   final bool _allowSubstitution;
   final TransitionSession? _phaseBOwner;
 
   bool get usesClinicalQuality => mode == OptimizationMode.clinical;
+
+  // Recomputed only from the immutable prefix. Every candidate remains present;
+  // cursors therefore retain their meaning after pause/resume and backtracking.
+  List<int> _orderedCandidates(int depth) {
+    final day = _days[depth];
+    final counts = List<int>.filled(problem.doctors.length, 0);
+    for (final p in _prefix) {
+      if (p >= 0) counts[p]++;
+    }
+    final doctors = List<int>.generate(problem.doctors.length, (i) => i);
+    doctors.sort((a, b) {
+      final mustA = problem.doctors[a].must.contains(day);
+      final mustB = problem.doctors[b].must.contains(day);
+      if (mustA != mustB) return mustA ? -1 : 1;
+      final byCount = counts[a].compareTo(counts[b]);
+      return byCount != 0 ? byCount : a.compareTo(b);
+    });
+    return [
+      if (problem.slotRequirements[depth] == SlotRequirement.optional)
+        unfilledSlot,
+      ...doctors,
+    ];
+  }
+
+  // A missed mandatory day cannot be repaired once all slots of that day have
+  // passed. The prefix includes every decision on those calendar days.
+  bool _missedMandatoryDay() {
+    final nextDay = _prefix.length < _days.length
+        ? _days[_prefix.length]
+        : problem.slotsPerDay.length;
+    for (var doctor = 0; doctor < problem.doctors.length; doctor++) {
+      for (final day in problem.doctors[doctor].must) {
+        if (day >= nextDay) continue;
+        var found = false;
+        for (var i = 0; i < _prefix.length; i++) {
+          if (_days[i] == day && _prefix[i] == doctor) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) return true;
+      }
+    }
+    return false;
+  }
 
   void _validateMode() {
     if (usesClinicalQuality &&
@@ -382,6 +432,7 @@ class SearchSession {
   Solution? _best;
   int visitedNodes = 0;
   int incumbentImprovements = 0;
+  int? firstFeasibleNode;
   bool _complete = false;
   bool _cancelled = false;
   void cancel() => _cancelled = true;
@@ -501,10 +552,12 @@ class SearchSession {
             )
           : evaluator.evaluate(problem, candidate);
       if (_best == null || clinical.compareTo(_best!.clinicalQuality!) < 0) {
+        firstFeasibleNode ??= visitedNodes;
         if (_best != null) incumbentImprovements++;
         _best = Solution(_prefix, q, clinicalQuality: clinical);
       }
     } else if (_best == null || _better(q, _best!.quality)) {
+      firstFeasibleNode ??= visitedNodes;
       if (_best != null) incumbentImprovements++;
       _best = candidate;
     }
@@ -593,12 +646,17 @@ class SearchSession {
         continue;
       }
       final index = _next[depth]++;
-      final candidate = index == problem.doctors.length ? unfilledSlot : index;
+      final candidate = candidateOrdering
+          ? _orderedCandidates(depth)[index]
+          : index == problem.doctors.length
+          ? unfilledSlot
+          : index;
       visitedNodes++;
       stepNodes++;
       if (candidate == unfilledSlot || _allowed(candidate, depth)) {
         _prefix.add(candidate);
-        if (enablePruning && _prune()) {
+        if ((earlyDeadEnds && _missedMandatoryDay()) ||
+            (enablePruning && _prune())) {
           _prefix.removeLast();
         } else {
           _next[depth + 1] = 0;
@@ -619,6 +677,8 @@ final class TransitionSession {
     Problem input, {
     this.enablePruning = true,
     this.mode = OptimizationMode.clinical,
+    this.candidateOrdering = false,
+    this.earlyDeadEnds = false,
   }) : problem = Problem.fromMessage(input.toMessage()) {
     if (problem.startDate == null || problem.slotRoles == null) {
       throw ArgumentError('Clinical date and roles required');
@@ -627,11 +687,14 @@ final class TransitionSession {
       problem,
       enablePruning: enablePruning,
       mode: mode,
+      candidateOrdering: candidateOrdering,
+      earlyDeadEnds: earlyDeadEnds,
     );
   }
   final Problem problem;
   final bool enablePruning;
   final OptimizationMode mode;
+  final bool candidateOrdering, earlyDeadEnds;
   late final SearchSession _restricted;
   SearchSession? _substitution;
   RestrictedVerdict _verdict = RestrictedVerdict.pending;

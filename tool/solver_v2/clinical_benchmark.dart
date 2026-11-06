@@ -12,6 +12,7 @@ Problem snapshot(int people, int days, String variant) {
   // people are juniors. All identifiers and constraints are synthetic.
   final seniorCount = people < 4 ? people : 4;
   final impossible = variant == 'impossible';
+  final start = days == 31 ? DateTime.utc(2026, 12) : DateTime.utc(2026, 11);
   final doctors = <Doctor>[];
   for (var i = 0; i < people; i++) {
     final senior = i < seniorCount;
@@ -40,12 +41,12 @@ Problem snapshot(int people, int days, String variant) {
         maxDuties: max,
         must: i == 0 && !impossible ? {3} : {},
         unavailable: blocked,
-        previousDuties: i == 0 ? [DateTime.utc(2026, 10, 31)] : [],
+        previousDuties: i == 0 ? [start.subtract(const Duration(days: 1))] : [],
       ),
     );
   }
   return Problem(
-    startDate: DateTime.utc(2026, 11),
+    startDate: start,
     doctors: doctors,
     slotsPerDay: List.filled(days, 2),
     slotRoles: [
@@ -60,7 +61,15 @@ Problem snapshot(int people, int days, String variant) {
     dayDifficulties: [
       for (var i = 0; i < days; i++)
         DayDifficulty(
-          weekdayScore: [5, 3, 3, 3, 1, 6, 9][i % 7],
+          weekdayScore: [
+            3,
+            3,
+            3,
+            1,
+            6,
+            9,
+            5,
+          ][start.add(Duration(days: i)).weekday - 1],
           holidayName: i == 9 ? 'Synthetic holiday' : null,
           holidayScore: i == 9 ? 8 : null,
         ),
@@ -69,8 +78,10 @@ Problem snapshot(int people, int days, String variant) {
 }
 
 void main(List<String> args) {
-  if (args.length != 5) {
-    stderr.writeln('expected people days variant mode limit');
+  if (args.length < 5 || args.length > 6) {
+    stderr.writeln(
+      'expected people days variant mode limit [baseline|ordering|deadends|combined]',
+    );
     exit(64);
   }
   final people = int.parse(args[0]),
@@ -78,13 +89,19 @@ void main(List<String> args) {
       variant = args[2],
       mode = args[3],
       limit = int.parse(args[4]);
+  final strategy = args.length == 6 ? args[5] : 'baseline';
   if (!['standard', 'tight', 'hard', 'impossible'].contains(variant) ||
       !['seconds', 'node-budget'].contains(mode) ||
-      limit <= 0) {
+      limit <= 0 ||
+      !['baseline', 'ordering', 'deadends', 'combined'].contains(strategy)) {
     throw ArgumentError('Invalid arguments');
   }
   final p = snapshot(people, days, variant),
-      search = SearchSession(snapshot(people, days, variant));
+      search = SearchSession(
+        snapshot(people, days, variant),
+        candidateOrdering: strategy == 'ordering' || strategy == 'combined',
+        earlyDeadEnds: strategy == 'deadends' || strategy == 'combined',
+      );
   final watch = Stopwatch()..start();
   Solution? seen;
   int? firstMicros;
@@ -144,6 +161,7 @@ void main(List<String> args) {
         'status': result.status.name,
         'pauseReason': result.pauseReason?.name,
         'firstMicrosUpperBound': firstMicros,
+        'firstFeasibleNode': search.firstFeasibleNode,
         'firstQuality': firstQuality,
         'lastQuality': search.best?.clinicalQuality?.components
             .map((x) => x.toString())
@@ -163,6 +181,7 @@ void main(List<String> args) {
   stdout.writeln(
     jsonEncode({
       'people': people,
+      'strategy': strategy,
       'days': days,
       'variant': variant,
       'mode': mode,
