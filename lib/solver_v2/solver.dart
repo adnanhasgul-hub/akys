@@ -41,20 +41,57 @@ class Doctor {
   final List<DateTime> previousDuties;
 }
 
+/// Daily admin scores; a holiday never adds to the weekday score.
+final class DayDifficulty {
+  const DayDifficulty({
+    required this.weekdayScore,
+    this.holidayName,
+    this.holidayScore,
+  });
+  final int weekdayScore;
+  final String? holidayName;
+  final int? holidayScore;
+  int get effectiveScore => holidayScore != null && holidayScore! > weekdayScore
+      ? holidayScore!
+      : weekdayScore;
+  Map<String, Object?> toMessage() => {
+    'weekdayScore': weekdayScore,
+    'holidayName': holidayName,
+    'holidayScore': holidayScore,
+  };
+}
+
 class Problem {
   Problem({
     required List<Doctor> doctors,
     required List<int> slotsPerDay,
     this.startDate,
     List<DutyRole>? slotRoles,
+    List<DayDifficulty>? dayDifficulties,
     this.clinicMaxDuties = 8,
   }) : doctors = List.unmodifiable(doctors),
        slotsPerDay = List.unmodifiable(slotsPerDay),
-       slotRoles = slotRoles == null ? null : List.unmodifiable(slotRoles) {
+       slotRoles = slotRoles == null ? null : List.unmodifiable(slotRoles),
+       dayDifficulties = dayDifficulties == null
+           ? null
+           : List.unmodifiable(dayDifficulties) {
     if (doctors.map((d) => d.id).toSet().length != doctors.length ||
         slotsPerDay.any((s) => s < 0) ||
         slotsPerDay.isEmpty ||
         clinicMaxDuties < 0 ||
+        (dayDifficulties != null &&
+            (startDate == null ||
+                dayDifficulties.length != slotsPerDay.length ||
+                dayDifficulties.any(
+                  (d) =>
+                      d.weekdayScore < 1 ||
+                      d.weekdayScore > 10 ||
+                      ((d.holidayName == null) != (d.holidayScore == null)) ||
+                      (d.holidayName != null &&
+                          d.holidayName!.trim().isEmpty) ||
+                      (d.holidayScore != null &&
+                          (d.holidayScore! < 1 || d.holidayScore! > 10)),
+                ))) ||
         doctors.any(
           (d) =>
               d.maxDuties > clinicMaxDuties ||
@@ -89,7 +126,22 @@ class Problem {
   final List<int> slotsPerDay;
   final DateTime? startDate;
   final List<DutyRole>? slotRoles;
+  final List<DayDifficulty>? dayDifficulties;
   final int clinicMaxDuties;
+  DateTime dateForDay(int day) {
+    if (startDate == null || day < 0 || day >= slotsPerDay.length) {
+      throw RangeError('Clinical day/date unavailable');
+    }
+    return startDate!.add(Duration(days: day));
+  }
+
+  int weekdayForDay(int day) => dateForDay(day).weekday;
+  int difficultyForDay(int day) {
+    dateForDay(day);
+    if (dayDifficulties == null) throw StateError('Daily scores unavailable');
+    return dayDifficulties![day].effectiveScore;
+  }
+
   List<int> get slotDays => [
     for (var day = 0; day < slotsPerDay.length; day++)
       for (var i = 0; i < slotsPerDay[day]; i++) day,
@@ -117,6 +169,9 @@ class Problem {
     'slotRoles': slotRoles?.map((r) => r.name).toList() ?? <String>[],
     'hasSlotRoles': slotRoles != null,
     'clinicMaxDuties': clinicMaxDuties,
+    'hasDayDifficulties': dayDifficulties != null,
+    'dayDifficulties':
+        dayDifficulties?.map((d) => d.toMessage()).toList() ?? [],
   };
   factory Problem.fromMessage(Map<String, dynamic> data) => Problem(
     doctors: [
@@ -149,6 +204,16 @@ class Problem {
               .toList()
         : null,
     clinicMaxDuties: data['clinicMaxDuties'] as int? ?? 8,
+    dayDifficulties: data['hasDayDifficulties'] == true
+        ? [
+            for (final raw in data['dayDifficulties'] as List)
+              DayDifficulty(
+                weekdayScore: raw['weekdayScore'] as int,
+                holidayName: raw['holidayName'] as String?,
+                holidayScore: raw['holidayScore'] as int?,
+              ),
+          ]
+        : null,
   );
 }
 

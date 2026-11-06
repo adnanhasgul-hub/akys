@@ -136,3 +136,52 @@ If there is no incumbent, only complete restricted exhaustion opens phase B;
 node/time limits and cancellation never do so. Existing capacity and prototype
 quality lower-bound pruning are unchanged. No new clinical quality objective or
 clinical objective pruning is implemented in this stage.
+
+## Stage 1.4B: independent clinical snapshot and quality
+
+`Problem.dayDifficulties` is an optional immutable per-day list paired with a UTC
+midnight start date. Each entry stores the admin's weekday score, optional
+holiday name and optional holiday score, both scores integer 1–10. The effective
+score is `max(weekdayScore, holidayScore)`; a holiday name and score must occur
+together. Date and ISO weekday are derived from UTC day offsets via `dateForDay`
+and `weekdayForDay`; effective score is exposed by `difficultyForDay`. Existing
+roles, groups, K1–K4 and caps remain in the snapshot. All fields round-trip
+through the problem message; legacy snapshots with no scores remain readable.
+
+`ClinicalQualityEvaluator` requires a complete clinical snapshot, a K1–K4 level
+for every senior, and a `SolutionValidator`-valid solution including process-local
+proof for a substitution. It does not call the solver's objective. The vector
+has 19 components; all are minimized, and comparison is lexicographic:
+
+1. Q1: number of junior doctors assigned to senior positions.
+2. Q2–Q3: negative number of days with at least one, then at least two, doctors
+   whose persistent group is junior (including a temporary senior-position holder).
+3. Q4: negative counts of solo senior days for K4, K3, K2, K1, in that order.
+   Narrow interpretation: the only person assigned on the day is a senior;
+   days with a senior paired with any other person are not solo days. Doctors
+   of equal K-level are aggregated, with no within-level objective.
+4. Q5: for Saturday, Friday, Sunday, Thursday in that order, two values each:
+   maximum of the senior/junior within-group count ranges, then their sum.
+5. Q6: each doctor's duty count divided by their personal maximum, with each
+   group's ratio range computed exactly; first the worse group, then the sum.
+6. Q7: the worse senior/junior range of total difficulty scores, then the
+   greatest individual total across both groups. Every duty receives exactly
+   that day's effective score, independent of role.
+
+An empty or singleton group has range zero. For Q5 and Q7, all doctors in the
+snapshot, including zero-capacity doctors, participate in their group. For Q6 a
+doctor whose maximum is zero is excluded from ratios; hard validation already
+forbids assigning duties to them, and an empty/singleton eligible group has range
+zero. Caps remain hard maxima, never targets. Empty populations have individual
+maximum zero. Equal components proceed to the next component; equal full vectors
+compare equal. Exact normalized `BigInt` fractions and cross multiplication avoid
+floating-point rounding in all comparisons. Weekday is the real calendar day;
+holidays do not replace its category.
+
+The evaluator checks validity through the independent validator, including its
+existing prototype-quality consistency check. It never grants persistent approval
+for a local-only substitution. This stage does not integrate the clinical vector
+into `SearchSession`, alter its prototype objective, or add/change branch-and-
+bound. In particular, prototype objective bounds must be reconsidered before
+1.4C uses the new vector. Fixed required slot counts and roles constrain which
+coverage/second-junior alternatives can exist; optional slots are not modeled.
