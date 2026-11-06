@@ -1,4 +1,4 @@
-# AKYS V2 solver core — stage 1.1 prototype
+# AKYS V2 solver core — stage 1.2 prototype
 
 This module is independent of Flutter and Firebase. `Doctor`, `Problem`, and
 `Solution` are immutable snapshots. `Problem.toMessage`/`fromMessage` and
@@ -14,10 +14,16 @@ Quality is minimized lexicographically: (1) maximum minus minimum duty count,
 (2) sum of squared counts. Doctor input order breaks exact ties deterministically.
 
 The iterative depth-first search tries doctors in input order at each slot. It
-prunes only assignments that already violate the hard constraints; it does not
-prune on the objective. Once the finite tree is exhausted, the best valid leaf is
+prunes infeasible prefixes whose remaining total capacity is too small. Once an
+incumbent exists, it also computes a safe lexicographic lower bound: current
+maximum load minus floor(final total / doctor count), clamped at zero, and the
+minimum sum of squares obtained by water-filling current counts while ignoring
+availability, rest, and individual upper limits. Relaxation enlarges the set of
+completions; neither bound can overstate the best achievable value. A bound not
+better than the incumbent can be pruned because exact ties retain the first
+solution in input order. `enablePruning: false` reproduces the original search. Once the finite tree is exhausted, the best valid leaf is
 provably optimal; no valid leaf proves infeasibility. A budget/time stop does not
-prove either. Equal-quality branches are still enumerated. Complexity is
+prove either. Equal-quality branches may be pruned. Complexity is
 exponential; this is for small synthetic inputs, not production monthly planning.
 
 A `SearchSession` owns its current assignment prefix, per-depth next-candidate
@@ -27,7 +33,7 @@ is a timeout, not infeasibility. An optional per-call deadline may cut off a run
 at different points on different devices; fixed node budgets are deterministic.
 Cancellation keeps the incumbent and is terminal for that session. Session
 checkpoints are in-memory only, not serialized or written to Firestore. There
-are no numerical lower/upper bounds or branch-and-bound optimality certificates.
+is no separately serialized proof certificate or persisted frontier.
 
 `run` is synchronous: the caller must run bounded chunks in an appropriate
 isolate/worker and yield between chunks. Calling it on a Flutter Web UI thread
@@ -39,3 +45,17 @@ Not implemented: senior/junior roles, substitution, must-duty constraints,
 previous-month boundary, clinical duty groups, pairing/solo priorities, daily
 category or holiday fairness, difficulty score snapshots, triple-duty policy,
 Firestore compatibility, manual edits, authorization and V1 migration.
+
+An independent `SolutionValidator` recomputes slot count, indices, availability,
+capacity, rest and quality without using search internals. Result messages expose
+`pauseReason` and `canResume` for node-budget and deadline stops.
+
+## Synthetic benchmark
+
+Flutter 3.47.9 / Dart 3.13.7, Linux VM, one un-warmed in-process run: four
+doctors (maximum three duties), seven consecutive one-slot days. Original DFS:
+1,508 candidate visits, 2,379 µs. Branch-and-bound: 272 visits, 487 µs. Both
+exhausted their search and proved quality `[1, 13]` optimal. Wall times vary
+with JIT, host load and execution order; these single-run numbers do not prove
+clinical-scale performance. The test suite also compares 512 generated small
+problems with a separate exhaustive oracle, both uninterrupted and resumed.

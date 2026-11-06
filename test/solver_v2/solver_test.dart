@@ -94,6 +94,8 @@ void main() {
     final session = SearchSession(p);
     var r = session.run(maxNodes: 1);
     expect(r.status, SearchStatus.paused);
+    expect(r.canResume, isTrue);
+    expect(r.pauseReason, PauseReason.nodeBudget);
     while (r.status == SearchStatus.paused ||
         r.status == SearchStatus.feasibleNotProven) {
       r = session.run(maxNodes: 2);
@@ -117,6 +119,8 @@ void main() {
     final timed = session.run(maxNodes: 100, timeLimit: Duration.zero);
     expect(timed.status, SearchStatus.feasibleNotProven);
     expect(timed.best, same(saved));
+    expect(timed.pauseReason, PauseReason.deadline);
+    expect(timed.canResume, isTrue);
     expect(timed.toMessage()['status'], 'feasibleNotProven');
     session.cancel();
     r = session.run(maxNodes: 100);

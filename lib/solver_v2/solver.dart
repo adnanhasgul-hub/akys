@@ -77,25 +77,36 @@ enum SearchStatus {
   cancelled,
 }
 
+enum PauseReason { nodeBudget, deadline }
+
 class SearchResult {
-  const SearchResult(this.status, this.best, this.visitedNodes);
+  const SearchResult(
+    this.status,
+    this.best,
+    this.visitedNodes, {
+    this.pauseReason,
+  });
   final SearchStatus status;
   final Solution? best;
   final int visitedNodes;
+  final PauseReason? pauseReason;
+  bool get canResume => pauseReason != null;
   Map<String, Object?> toMessage() => {
     'status': status.name,
     'best': best?.toMessage(),
     'visitedNodes': visitedNodes,
+    'pauseReason': pauseReason?.name,
   };
 }
 
 /// Complete DFS frontier: next candidate cursor per depth and current prefix.
 /// Kept in memory; stepping is synchronous and must be run off the UI thread.
 class SearchSession {
-  SearchSession(this.problem)
+  SearchSession(this.problem, {this.enablePruning = true})
     : _days = problem.slotDays,
       _next = List.filled(problem.slotDays.length + 1, 0);
   final Problem problem;
+  final bool enablePruning;
   final List<int> _days, _next;
   final List<int> _prefix = [];
   Solution? _best;
@@ -116,6 +127,38 @@ class SearchSession {
       }
     }
     return count < d.maxDuties;
+  }
+
+  // Relax spacing and availability: this enlarges the feasible set, so the
+  // resulting load bounds can never be greater than a real completion's score.
+  bool _prune() {
+    final counts = List<int>.filled(problem.doctors.length, 0);
+    for (final p in _prefix) {
+      counts[p]++;
+    }
+    final remaining = _days.length - _prefix.length;
+    var capacity = 0;
+    for (var i = 0; i < counts.length; i++) {
+      capacity += problem.doctors[i].maxDuties - counts[i];
+    }
+    if (capacity < remaining) return true;
+    if (_best == null || counts.isEmpty) return false;
+    final total = _days.length;
+    final maxCurrent = counts.reduce((a, b) => a > b ? a : b);
+    final lowerRange = (maxCurrent - total ~/ counts.length).clamp(0, total);
+    // Water-filling without individual upper bounds gives minimum sum of squares.
+    final relaxed = [...counts];
+    for (var i = 0; i < remaining; i++) {
+      var minIndex = 0;
+      for (var j = 1; j < relaxed.length; j++) {
+        if (relaxed[j] < relaxed[minIndex]) minIndex = j;
+      }
+      relaxed[minIndex]++;
+    }
+    final lowerSquares = relaxed.fold<int>(0, (a, b) => a + b * b);
+    final incumbent = _best!.quality;
+    return lowerRange > incumbent[0] ||
+        (lowerRange == incumbent[0] && lowerSquares >= incumbent[1]);
   }
 
   bool _better(List<int> a, List<int> b) {
@@ -169,6 +212,7 @@ class SearchSession {
               : SearchStatus.feasibleNotProven,
           _best,
           visitedNodes,
+          pauseReason: PauseReason.deadline,
         );
       }
       if (stepNodes >= maxNodes) {
@@ -176,6 +220,7 @@ class SearchSession {
           _best == null ? SearchStatus.paused : SearchStatus.feasibleNotProven,
           _best,
           visitedNodes,
+          pauseReason: PauseReason.nodeBudget,
         );
       }
       final depth = _prefix.length;
@@ -209,7 +254,11 @@ class SearchSession {
       stepNodes++;
       if (_allowed(candidate, depth)) {
         _prefix.add(candidate);
-        _next[depth + 1] = 0;
+        if (enablePruning && _prune()) {
+          _prefix.removeLast();
+        } else {
+          _next[depth + 1] = 0;
+        }
       }
     }
   }
