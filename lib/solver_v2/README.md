@@ -300,3 +300,32 @@ budget with `feasibleNotProven`. Its first vector was
 These are single-run measurements affected by JIT and machine load, not a
 clinical-scale time guarantee. Search remains exponential and synchronous;
 no production UI, backend, worker or persistent proof integration is implied.
+
+## Stage 1.4D: explicit mode and clinical input boundary
+
+`OptimizationMode.clinical` is the default for both search entry points.
+`OptimizationMode.prototypeLegacy` must be explicitly selected for legacy
+experiments. Mode never depends on whether scoring metadata happens to exist.
+Clinical search rejects missing UTC start date, per-slot role or explicit
+required/optional declarations, daily difficulty metadata, and senior K1–K4
+levels with `ArgumentError` before search. The `Problem` constructor rejects
+invalid counts, inconsistent holiday name/score, out-of-range scores and caps,
+conflicting must/cannot constraints, and invalid calendar dates. These are input
+errors, never infeasibility proofs. Explicit slot-requirement presence survives
+message round trips; older messages with an actual requirements list but no
+presence marker are treated as explicitly specified because their original
+intent cannot be recovered. Importers must validate legacy data provenance.
+
+A node-budget stop without an incumbent is `paused`, while a deadline stop
+without one is `timeoutWithoutSolution`; both are resumable. An incumbent at
+interruption is `feasibleNotProven`. `optimal` and `infeasible` require an
+exhausted search, except legacy-only objective bounds which are not used in
+clinical mode. Cancellation is separate. `incumbentImprovements` counts strict
+replacements after the first incumbent. Proof authority remains process-local;
+serialized claims are not certificates and do not authorize durable approval.
+
+The fixed-seed 200-model oracle independently enumerates slots and checks hard
+constraints. It uses the separately implemented clinical evaluator for quality;
+it does not independently reproduce all quality arithmetic. Existing direct
+component tests complement it. This small synthetic evidence is not a guarantee
+of clinical-scale speed or independent certification of all evaluator arithmetic.

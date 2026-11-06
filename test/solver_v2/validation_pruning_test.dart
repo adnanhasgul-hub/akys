@@ -4,6 +4,13 @@ import 'package:akys/solver_v2/solution_validator.dart';
 
 import 'solver_test.dart' show oracle;
 
+SearchSession legacySearch(Problem p, {bool enablePruning = true}) =>
+    SearchSession(
+      p,
+      enablePruning: enablePruning,
+      mode: OptimizationMode.prototypeLegacy,
+    );
+
 void main() {
   const validator = SolutionValidator();
   test(
@@ -65,7 +72,7 @@ void main() {
             slotsPerDay: [for (var d = 0; d < 5; d++) (slots >> d) & 1],
           );
           final expected = oracle(p);
-          final s = SearchSession(p);
+          final s = legacySearch(p);
           var r = s.run(maxNodes: 3);
           while (r.status == SearchStatus.paused ||
               r.status == SearchStatus.feasibleNotProven) {
@@ -86,7 +93,7 @@ void main() {
             );
             expect(validator.validate(p, r.best!).isValid, isTrue);
           }
-          final raw = SearchSession(
+          final raw = legacySearch(
             p,
             enablePruning: false,
           ).run(maxNodes: 100000);
@@ -100,20 +107,17 @@ void main() {
   });
   test('zero slots and doctors, insufficient capacity', () {
     final empty = Problem(doctors: [], slotsPerDay: [0]);
-    final r = SearchSession(empty).run(maxNodes: 5);
+    final r = legacySearch(empty).run(maxNodes: 5);
     expect(r.status, SearchStatus.optimal);
     expect(validator.validate(empty, r.best!).isValid, isTrue);
     final none = Problem(doctors: [], slotsPerDay: [1]);
-    expect(
-      SearchSession(none).run(maxNodes: 5).status,
-      SearchStatus.infeasible,
-    );
+    expect(legacySearch(none).run(maxNodes: 5).status, SearchStatus.infeasible);
     final shortage = Problem(
       doctors: [Doctor(id: 'a', maxDuties: 0)],
       slotsPerDay: [1],
     );
     expect(
-      SearchSession(shortage).run(maxNodes: 5).status,
+      legacySearch(shortage).run(maxNodes: 5).status,
       SearchStatus.infeasible,
     );
   });
@@ -125,7 +129,7 @@ void main() {
     final times = <int>[], results = <SearchResult>[];
     for (final enabled in [false, true]) {
       final watch = Stopwatch()..start();
-      final r = SearchSession(p, enablePruning: enabled).run(maxNodes: 1000000);
+      final r = legacySearch(p, enablePruning: enabled).run(maxNodes: 1000000);
       watch.stop();
       times.add(watch.elapsedMicroseconds);
       results.add(r);

@@ -2,6 +2,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:akys/solver_v2/solver.dart';
 import 'package:akys/solver_v2/clinical_quality.dart';
 
+TransitionSession legacyTransition(Problem p, {bool enablePruning = true}) =>
+    TransitionSession(
+      p,
+      enablePruning: enablePruning,
+      mode: OptimizationMode.prototypeLegacy,
+    );
+
 Solution solution(Problem p, List<int> ids) {
   final counts = List<int>.filled(p.doctors.length, 0);
   for (final id in ids) {
@@ -204,7 +211,7 @@ void main() {
         slots: [1],
         roles: [DutyRole.senior],
       );
-      final session = TransitionSession(input);
+      final session = legacyTransition(input);
       var r = session.run(maxNodes: 100);
       while (r.canResume) {
         r = session.run(maxNodes: 100);

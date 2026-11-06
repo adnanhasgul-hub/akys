@@ -3,6 +3,13 @@ import 'package:akys/solver_v2/solver.dart';
 import 'package:akys/solver_v2/solution_validator.dart';
 import 'package:akys/solver_v2/clinical_quality.dart';
 
+TransitionSession legacyTransition(Problem p, {bool enablePruning = true}) =>
+    TransitionSession(
+      p,
+      enablePruning: enablePruning,
+      mode: OptimizationMode.prototypeLegacy,
+    );
+
 Problem input() => Problem(
   startDate: DateTime.utc(2026, 11, 1),
   doctors: [
@@ -16,7 +23,7 @@ Problem input() => Problem(
 void main() {
   const validator = SolutionValidator(), evaluator = ClinicalQualityEvaluator();
   test('non-incumbent phase B candidates validated and ranked without authorizing publication', () {
-    final s = TransitionSession(input());
+    final s = legacyTransition(input());
     final a = s.run(maxNodes: 100);
     expect(a.pauseReason, PauseReason.stageTransition);
     expect(s.phase, TransitionPhase.substitution);
@@ -32,7 +39,7 @@ void main() {
       session: s,
     );
     expect(checked.isValid, isTrue);
-    final fakeSession = TransitionSession(s.problem);
+    final fakeSession = legacyTransition(s.problem);
     expect(
       validator
           .validatePhaseBCandidate(s.problem, high, session: fakeSession)
@@ -84,7 +91,7 @@ void main() {
     'unproved timeout and forged serialized proof do not authorize candidates',
     () {
       final source = input();
-      final s = TransitionSession(source);
+      final s = legacyTransition(source);
       s.run(maxNodes: 100, timeLimit: Duration.zero);
       final fake = source.toMessage()..['proved'] = true;
       final fakeProblem = Problem.fromMessage(fake);

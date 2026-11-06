@@ -170,6 +170,7 @@ void main() {
       ],
       slotsPerDay: [1],
       slotRoles: [DutyRole.senior],
+      slotRequirements: [SlotRequirement.required],
       dayDifficulties: [const DayDifficulty(weekdayScore: 3)],
     );
     final s = TransitionSession(p);
@@ -202,6 +203,7 @@ void main() {
         doctors: [Doctor(id: 'j', group: DutyGroup.junior, maxDuties: 2)],
         slotsPerDay: [1, 0, 0, 1],
         slotRoles: [DutyRole.senior, DutyRole.senior],
+        slotRequirements: [SlotRequirement.required, SlotRequirement.required],
         dayDifficulties: [
           for (var i = 0; i < 4; i++) const DayDifficulty(weekdayScore: 3),
         ],
@@ -334,7 +336,7 @@ void main() {
     );
     if (result.canResume) expect(result.status, SearchStatus.feasibleNotProven);
     debugPrint(
-      'CLINICAL_BENCH medium nodes=${result.visitedNodes} firstMs=$firstMs totalMs=${watch.elapsedMilliseconds} first=${first?.components} final=${result.best!.clinicalQuality!.components} status=${result.status.name}',
+      'CLINICAL_BENCH medium doctors=7 days=5 required=5 optional=5 budget=2000 nodes=${result.visitedNodes} firstMs=$firstMs totalMs=${watch.elapsedMilliseconds} improvements=${session.incumbentImprovements} first=${first?.components} final=${result.best!.clinicalQuality!.components} status=${result.status.name}',
     );
   });
   test(

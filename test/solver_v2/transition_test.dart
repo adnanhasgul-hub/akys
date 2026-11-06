@@ -2,6 +2,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:akys/solver_v2/solver.dart';
 import 'package:akys/solver_v2/solution_validator.dart';
 
+TransitionSession legacyTransition(Problem p, {bool enablePruning = true}) =>
+    TransitionSession(
+      p,
+      enablePruning: enablePruning,
+      mode: OptimizationMode.prototypeLegacy,
+    );
+
 Problem problem(
   int seniorCount,
   int juniorCount,
@@ -31,7 +38,7 @@ SearchResult finish(TransitionSession s, {int budget = 1}) {
 void main() {
   const validator = SolutionValidator();
   test('real seniors cover schedule; no phase B', () {
-    final s = TransitionSession(problem(1, 1, [1, 0, 0, 1]));
+    final s = legacyTransition(problem(1, 1, [1, 0, 0, 1]));
     final r = finish(s);
     expect(r.best, isNotNull);
     expect(s.restrictedVerdict, RestrictedVerdict.feasible);
@@ -40,7 +47,7 @@ void main() {
   });
   test('one substitution, bound snapshot, forged claim rejected', () {
     final original = problem(0, 1, [1]);
-    final s = TransitionSession(original);
+    final s = legacyTransition(original);
     final r = finish(s);
     expect(s.restrictedVerdict, RestrictedVerdict.provenInfeasible);
     expect(r.status, SearchStatus.optimal);
@@ -64,7 +71,7 @@ void main() {
   test(
     'two substitutions and phase B pause/resume; impossible with limits',
     () {
-      final s = TransitionSession(problem(0, 1, [1, 0, 0, 1]));
+      final s = legacyTransition(problem(0, 1, [1, 0, 0, 1]));
       final first = s.run(maxNodes: 100);
       expect(first.canResume, isTrue);
       expect(s.phase, TransitionPhase.substitution);
@@ -74,14 +81,14 @@ void main() {
         validator.validate(s.problem, r.best!, localEvidence: s).isValid,
         isTrue,
       );
-      final bad = TransitionSession(problem(0, 1, [1, 1]));
+      final bad = legacyTransition(problem(0, 1, [1, 1]));
       expect(finish(bad).status, SearchStatus.infeasible);
     },
   );
   test(
     'phase B timeout preserves locally verified incumbent without proof',
     () {
-      final s = TransitionSession(problem(0, 2, [1, 0, 0, 1]));
+      final s = legacyTransition(problem(0, 2, [1, 0, 0, 1]));
       var r = s.run(maxNodes: 100);
       expect(s.phase, TransitionPhase.substitution);
       while (r.best == null) {
@@ -104,7 +111,7 @@ void main() {
     },
   );
   test('timeout and cancellation do not authorize transition', () {
-    final s = TransitionSession(problem(0, 1, [1]));
+    final s = legacyTransition(problem(0, 1, [1]));
     expect(
       s.run(maxNodes: 50, timeLimit: Duration.zero).status,
       SearchStatus.timeoutWithoutSolution,
@@ -147,7 +154,7 @@ void main() {
 
           enumerate([]);
           for (final pruned in [true, false]) {
-            final s = TransitionSession(p, enablePruning: pruned);
+            final s = legacyTransition(p, enablePruning: pruned);
             final r = finish(s, budget: 3);
             if (minimum == null) {
               expect(r.status, SearchStatus.infeasible);

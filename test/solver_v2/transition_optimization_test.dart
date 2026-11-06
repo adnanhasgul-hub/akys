@@ -3,6 +3,13 @@ import 'package:akys/solver_v2/solver.dart';
 
 import 'solver_test.dart' show oracle;
 
+TransitionSession legacyTransition(Problem p, {bool enablePruning = true}) =>
+    TransitionSession(
+      p,
+      enablePruning: enablePruning,
+      mode: OptimizationMode.prototypeLegacy,
+    );
+
 void main() {
   Problem input() => Problem(
     startDate: DateTime.utc(2026, 11, 1),
@@ -15,7 +22,7 @@ void main() {
   );
   test('restricted first incumbent is provisional and optimization resumes without reruns', () {
     final p = input(), expected = oracle(p);
-    final session = TransitionSession(p);
+    final session = legacyTransition(p);
     var r = session.run(maxNodes: 1);
     while (r.best == null) {
       r = session.run(maxNodes: 1);
@@ -41,11 +48,11 @@ void main() {
     expect(r.visitedNodes, greaterThan(firstNodes));
     expect(session.phase, TransitionPhase.done);
     expect(session.restrictedVerdict, RestrictedVerdict.feasible);
-    final uninterrupted = TransitionSession(p).run(maxNodes: 1000);
+    final uninterrupted = legacyTransition(p).run(maxNodes: 1000);
     expect(uninterrupted.status, SearchStatus.optimal);
     expect(r.visitedNodes, uninterrupted.visitedNodes);
     expect(r.best!.assignments, uninterrupted.best!.assignments);
-    final unpruned = TransitionSession(
+    final unpruned = legacyTransition(
       p,
       enablePruning: false,
     ).run(maxNodes: 1000);
@@ -55,7 +62,7 @@ void main() {
   test(
     'cancellation after incumbent preserves it and never opens substitution',
     () {
-      final session = TransitionSession(input());
+      final session = legacyTransition(input());
       var r = session.run(maxNodes: 1);
       while (r.best == null) {
         r = session.run(maxNodes: 1);
@@ -78,7 +85,7 @@ void main() {
         slotsPerDay: [1],
         slotRoles: [DutyRole.senior],
       );
-      final s = TransitionSession(impossible);
+      final s = legacyTransition(impossible);
       expect(
         s.run(maxNodes: 100, timeLimit: Duration.zero).status,
         SearchStatus.timeoutWithoutSolution,

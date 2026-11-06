@@ -2,6 +2,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:akys/solver_v2/solver.dart';
 import 'package:akys/solver_v2/solution_validator.dart';
 
+SearchSession legacySearch(Problem p, {bool enablePruning = true}) =>
+    SearchSession(
+      p,
+      enablePruning: enablePruning,
+      mode: OptimizationMode.prototypeLegacy,
+    );
+TransitionSession legacyTransition(Problem p, {bool enablePruning = true}) =>
+    TransitionSession(
+      p,
+      enablePruning: enablePruning,
+      mode: OptimizationMode.prototypeLegacy,
+    );
+
 /// Independent complete enumeration and constraints, without solver or validator internals.
 List<(List<int>, List<int>)> oracle(Problem p, {required bool substitutions}) {
   final days = p.slotDays, found = <(List<int>, List<int>)>[];
@@ -114,8 +127,7 @@ void main() {
       final a = oracle(p, substitutions: false),
           b = oracle(p, substitutions: true);
       for (final prune in [false, true]) {
-        final s = TransitionSession(p, enablePruning: prune),
-            result = finish(s);
+        final s = legacyTransition(p, enablePruning: prune), result = finish(s);
         if (a.isNotEmpty) {
           expect(s.restrictedVerdict, RestrictedVerdict.feasible);
           expect(result.status, SearchStatus.optimal);
@@ -146,7 +158,7 @@ void main() {
       slotsPerDay: [2],
       slotRequirements: [SlotRequirement.optional, SlotRequirement.optional],
     );
-    final r = SearchSession(empty).run(maxNodes: 100);
+    final r = legacySearch(empty).run(maxNodes: 100);
     expect(r.status, SearchStatus.optimal);
     expect(r.best!.assignments, [-1, -1]);
     expect(const SolutionValidator().validate(empty, r.best!).isValid, isTrue);
@@ -159,7 +171,7 @@ void main() {
       slotRoles: [DutyRole.senior],
       slotRequirements: [SlotRequirement.optional],
     );
-    final solution = SearchSession(must).run(maxNodes: 100);
+    final solution = legacySearch(must).run(maxNodes: 100);
     expect(solution.best!.assignments, [0]);
     expect(
       const SolutionValidator().validate(must, solution.best!).isValid,
@@ -176,7 +188,7 @@ void main() {
         slotRoles: [DutyRole.senior, DutyRole.junior],
         slotRequirements: [SlotRequirement.required, SlotRequirement.optional],
       );
-      final s = TransitionSession(p);
+      final s = legacyTransition(p);
       expect(
         s.run(maxNodes: 10, timeLimit: Duration.zero).status,
         SearchStatus.timeoutWithoutSolution,
@@ -211,7 +223,7 @@ void main() {
         SlotRequirement.optional,
       ],
     );
-    final s = TransitionSession(p);
+    final s = legacyTransition(p);
     final paused = s.run(maxNodes: 0);
     expect(paused.status, SearchStatus.paused);
     expect(s.restrictedVerdict, RestrictedVerdict.pending);
@@ -236,7 +248,7 @@ void main() {
     );
     for (final prune in [false, true]) {
       final w = Stopwatch()..start();
-      final r = SearchSession(p, enablePruning: prune).run(maxNodes: 100000);
+      final r = legacySearch(p, enablePruning: prune).run(maxNodes: 100000);
       w.stop();
       expect(r.status, SearchStatus.optimal);
       expect(const SolutionValidator().validate(p, r.best!).isValid, isTrue);

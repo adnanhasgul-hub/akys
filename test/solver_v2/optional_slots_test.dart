@@ -3,6 +3,19 @@ import 'package:akys/solver_v2/solver.dart';
 import 'package:akys/solver_v2/clinical_quality.dart';
 import 'package:akys/solver_v2/solution_validator.dart';
 
+SearchSession legacySearch(Problem p, {bool enablePruning = true}) =>
+    SearchSession(
+      p,
+      enablePruning: enablePruning,
+      mode: OptimizationMode.prototypeLegacy,
+    );
+TransitionSession legacyTransition(Problem p, {bool enablePruning = true}) =>
+    TransitionSession(
+      p,
+      enablePruning: enablePruning,
+      mode: OptimizationMode.prototypeLegacy,
+    );
+
 Solution build(Problem p, List<int> assignments) {
   final counts = List<int>.filled(p.doctors.length, 0);
   for (final i in assignments) {
@@ -134,11 +147,8 @@ void main() {
         () => Problem(doctors: doctors, slotsPerDay: [1], slotRequirements: []),
         throwsArgumentError,
       );
-      expect(
-        SearchSession(m).run(maxNodes: 10000).status,
-        SearchStatus.optimal,
-      );
-      expect(TransitionSession(m).run(maxNodes: 10000).best, isNotNull);
+      expect(legacySearch(m).run(maxNodes: 10000).status, SearchStatus.optimal);
+      expect(legacyTransition(m).run(maxNodes: 10000).best, isNotNull);
     },
   );
 }

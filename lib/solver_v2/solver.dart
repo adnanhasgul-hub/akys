@@ -8,6 +8,9 @@ enum DutyRole { senior, junior }
 
 enum SlotRequirement { required, optional }
 
+/// Legacy mode is opt-in and must not be used as a clinical fallback.
+enum OptimizationMode { clinical, prototypeLegacy }
+
 /// Sentinel used only for an unfilled optional slot.
 const int unfilledSlot = -1;
 
@@ -79,6 +82,7 @@ final class Problem {
     this.clinicMaxDuties = 8,
   }) : doctors = List.unmodifiable(doctors),
        slotsPerDay = List.unmodifiable(slotsPerDay),
+       hasExplicitSlotRequirements = slotRequirements != null,
        slotRoles = slotRoles == null ? null : List.unmodifiable(slotRoles),
        slotRequirements = List.unmodifiable(
          slotRequirements ??
@@ -150,6 +154,7 @@ final class Problem {
   final DateTime? startDate;
   final List<DutyRole>? slotRoles;
   final List<SlotRequirement> slotRequirements;
+  final bool hasExplicitSlotRequirements;
   final List<DayDifficulty>? dayDifficulties;
   final int clinicMaxDuties;
   DateTime dateForDay(int day) {
@@ -193,6 +198,7 @@ final class Problem {
     'slotRoles': slotRoles?.map((r) => r.name).toList() ?? <String>[],
     'hasSlotRoles': slotRoles != null,
     'slotRequirements': slotRequirements.map((r) => r.name).toList(),
+    'hasExplicitSlotRequirements': hasExplicitSlotRequirements,
     'clinicMaxDuties': clinicMaxDuties,
     'hasDayDifficulties': dayDifficulties != null,
     'dayDifficulties':
@@ -229,9 +235,11 @@ final class Problem {
               .toList()
         : null,
     clinicMaxDuties: data['clinicMaxDuties'] as int? ?? 8,
-    slotRequirements: (data['slotRequirements'] as List?)
-        ?.map((r) => SlotRequirement.values.byName(r as String))
-        .toList(),
+    slotRequirements: data['hasExplicitSlotRequirements'] == false
+        ? null
+        : (data['slotRequirements'] as List?)
+              ?.map((r) => SlotRequirement.values.byName(r as String))
+              .toList(),
     dayDifficulties: data['hasDayDifficulties'] == true
         ? [
             for (final raw in data['dayDifficulties'] as List)
@@ -325,30 +333,55 @@ class SearchResult {
 /// Complete DFS frontier: next candidate cursor per depth and current prefix.
 /// Kept in memory; stepping is synchronous and must be run off the UI thread.
 class SearchSession {
-  SearchSession(this.problem, {this.enablePruning = true})
-    : _phaseBOwner = null,
-      _allowSubstitution = false,
-      _days = problem.slotDays,
-      _next = List.filled(problem.slotDays.length + 1, 0);
+  SearchSession(
+    this.problem, {
+    this.enablePruning = true,
+    this.mode = OptimizationMode.clinical,
+  }) : _phaseBOwner = null,
+       _allowSubstitution = false,
+       _days = problem.slotDays,
+       _next = List.filled(problem.slotDays.length + 1, 0) {
+    _validateMode();
+  }
   SearchSession._substitution(
     this.problem, {
     this.enablePruning = true,
     required TransitionSession owner,
-  }) : _phaseBOwner = owner,
+  }) : mode = owner.mode,
+       _phaseBOwner = owner,
        _allowSubstitution = true,
        _days = problem.slotDays,
-       _next = List.filled(problem.slotDays.length + 1, 0);
+       _next = List.filled(problem.slotDays.length + 1, 0) {
+    _validateMode();
+  }
   final Problem problem;
   final bool enablePruning;
+  final OptimizationMode mode;
   final bool _allowSubstitution;
   final TransitionSession? _phaseBOwner;
 
-  /// Legacy snapshots without scoring metadata retain the prototype objective.
-  bool get usesClinicalQuality => problem.dayDifficulties != null;
+  bool get usesClinicalQuality => mode == OptimizationMode.clinical;
+
+  void _validateMode() {
+    if (usesClinicalQuality &&
+        (problem.startDate == null ||
+            problem.slotRoles == null ||
+            !problem.hasExplicitSlotRequirements ||
+            problem.dayDifficulties == null ||
+            problem.doctors.any(
+              (d) => d.group == DutyGroup.senior && d.seniorityLevel == null,
+            ))) {
+      throw ArgumentError(
+        'Invalid clinical snapshot: date, roles, explicit slot requirements, scores and senior levels are required',
+      );
+    }
+  }
+
   final List<int> _days, _next;
   final List<int> _prefix = [];
   Solution? _best;
   int visitedNodes = 0;
+  int incumbentImprovements = 0;
   bool _complete = false;
   bool _cancelled = false;
   void cancel() => _cancelled = true;
@@ -468,9 +501,11 @@ class SearchSession {
             )
           : evaluator.evaluate(problem, candidate);
       if (_best == null || clinical.compareTo(_best!.clinicalQuality!) < 0) {
+        if (_best != null) incumbentImprovements++;
         _best = Solution(_prefix, q, clinicalQuality: clinical);
       }
     } else if (_best == null || _better(q, _best!.quality)) {
+      if (_best != null) incumbentImprovements++;
       _best = candidate;
     }
   }
@@ -580,15 +615,23 @@ enum TransitionPhase { restricted, substitution, done }
 enum RestrictedVerdict { pending, feasible, provenInfeasible, cancelled }
 
 final class TransitionSession {
-  TransitionSession(Problem input, {this.enablePruning = true})
-    : problem = Problem.fromMessage(input.toMessage()) {
+  TransitionSession(
+    Problem input, {
+    this.enablePruning = true,
+    this.mode = OptimizationMode.clinical,
+  }) : problem = Problem.fromMessage(input.toMessage()) {
     if (problem.startDate == null || problem.slotRoles == null) {
       throw ArgumentError('Clinical date and roles required');
     }
-    _restricted = SearchSession(problem, enablePruning: enablePruning);
+    _restricted = SearchSession(
+      problem,
+      enablePruning: enablePruning,
+      mode: mode,
+    );
   }
   final Problem problem;
   final bool enablePruning;
+  final OptimizationMode mode;
   late final SearchSession _restricted;
   SearchSession? _substitution;
   RestrictedVerdict _verdict = RestrictedVerdict.pending;

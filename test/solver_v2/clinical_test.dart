@@ -2,6 +2,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:akys/solver_v2/solver.dart';
 import 'package:akys/solver_v2/solution_validator.dart';
 
+SearchSession legacySearch(Problem p, {bool enablePruning = true}) =>
+    SearchSession(
+      p,
+      enablePruning: enablePruning,
+      mode: OptimizationMode.prototypeLegacy,
+    );
+
 void main() {
   const validator = SolutionValidator();
   final start = DateTime.utc(2026, 11, 1);
@@ -33,7 +40,7 @@ void main() {
         slotsPerDay: [1, 0, 0, 1],
         slotRoles: [DutyRole.senior, DutyRole.senior],
       );
-      final r = SearchSession(p).run(maxNodes: 100);
+      final r = legacySearch(p).run(maxNodes: 100);
       expect(r.status, SearchStatus.optimal);
       expect(r.best!.assignments, [0, 0]);
       expect(validator.validate(p, r.best!).isValid, isTrue);
@@ -44,11 +51,11 @@ void main() {
         slotRoles: [DutyRole.senior],
       );
       expect(
-        SearchSession(forced).run(maxNodes: 100).status,
+        legacySearch(forced).run(maxNodes: 100).status,
         SearchStatus.infeasible,
       );
       expect(
-        SearchSession(forced)
+        legacySearch(forced)
             .run(maxNodes: 100, timeLimit: Duration.zero)
             .status,
         SearchStatus.timeoutWithoutSolution,
@@ -85,7 +92,7 @@ void main() {
       slotsPerDay: [1, 0, 1],
       slotRoles: [DutyRole.senior, DutyRole.senior],
     );
-    expect(SearchSession(p).run(maxNodes: 100).status, SearchStatus.infeasible);
+    expect(legacySearch(p).run(maxNodes: 100).status, SearchStatus.infeasible);
     expect(validator.validate(p, Solution([0, 0], [0, 4])).isValid, isFalse);
     final dup = Problem(
       startDate: start,
@@ -179,12 +186,12 @@ void main() {
         qualities.sort(
           (a, b) => a[0] != b[0] ? a[0].compareTo(b[0]) : a[1].compareTo(b[1]),
         );
-        final session = SearchSession(p);
+        final session = legacySearch(p);
         var r = session.run(maxNodes: 1);
         while (r.canResume) {
           r = session.run(maxNodes: 1);
         }
-        final unpruned = SearchSession(
+        final unpruned = legacySearch(
           p,
           enablePruning: false,
         ).run(maxNodes: 10000);

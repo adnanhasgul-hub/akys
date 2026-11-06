@@ -1,6 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:akys/solver_v2/solver.dart';
 
+SearchSession legacySearch(Problem p, {bool enablePruning = true}) =>
+    SearchSession(
+      p,
+      enablePruning: enablePruning,
+      mode: OptimizationMode.prototypeLegacy,
+    );
+
 /// Independent exhaustive oracle: Cartesian product then separate checks.
 List<(List<int>, List<int>)> oracle(Problem p) {
   final days = p.slotDays, answers = <(List<int>, List<int>)>[];
@@ -52,8 +59,8 @@ void main() {
     final expected = oracle(p);
     expect(expected.length, greaterThan(1));
     expect(expected.map((e) => e.$2.join(',')).toSet().length, greaterThan(1));
-    final a = SearchSession(p).run(maxNodes: 100000);
-    final b = SearchSession(p).run(maxNodes: 100000);
+    final a = legacySearch(p).run(maxNodes: 100000);
+    final b = legacySearch(p).run(maxNodes: 100000);
     expect(a.status, SearchStatus.optimal);
     expect(a.best!.quality, expected.first.$2);
     expect(
@@ -74,7 +81,7 @@ void main() {
       slotsPerDay: [1, 1],
     );
     expect(oracle(p), isEmpty);
-    expect(SearchSession(p).run(maxNodes: 100).status, SearchStatus.infeasible);
+    expect(legacySearch(p).run(maxNodes: 100).status, SearchStatus.infeasible);
   });
   test('availability, capacity and three calendar days', () {
     final p = Problem(
@@ -84,14 +91,14 @@ void main() {
       ],
       slotsPerDay: [1, 1, 0, 1],
     );
-    final answer = SearchSession(p).run(maxNodes: 1000);
+    final answer = legacySearch(p).run(maxNodes: 1000);
     expect(answer.status, SearchStatus.optimal);
     expect(answer.best!.quality, oracle(p).first.$2);
   });
   test('pause resumes frontier without redoing completed branches', () {
     final p = Problem(doctors: people, slotsPerDay: [1, 1, 1, 1]);
-    final one = SearchSession(p).run(maxNodes: 10000);
-    final session = SearchSession(p);
+    final one = legacySearch(p).run(maxNodes: 10000);
+    final session = legacySearch(p);
     var r = session.run(maxNodes: 1);
     expect(r.status, SearchStatus.paused);
     expect(r.canResume, isTrue);
@@ -106,7 +113,7 @@ void main() {
   });
   test('timeout is not infeasible; cancellation preserves incumbent', () {
     final p = Problem(doctors: people, slotsPerDay: [1, 1, 1, 1]);
-    final session = SearchSession(p);
+    final session = legacySearch(p);
     expect(
       session.run(maxNodes: 100, timeLimit: Duration.zero).status,
       SearchStatus.timeoutWithoutSolution,
@@ -130,7 +137,7 @@ void main() {
   test('problem message roundtrip and zero-slot case', () {
     final p = Problem(doctors: people, slotsPerDay: [0]);
     final clone = Problem.fromMessage(p.toMessage());
-    final r = SearchSession(clone).run(maxNodes: 1);
+    final r = legacySearch(clone).run(maxNodes: 1);
     expect(r.status, SearchStatus.optimal);
     expect(r.best!.quality, [0, 0]);
   });
