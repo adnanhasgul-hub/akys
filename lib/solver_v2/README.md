@@ -59,3 +59,39 @@ exhausted their search and proved quality `[1, 13]` optimal. Wall times vary
 with JIT, host load and execution order; these single-run numbers do not prove
 clinical-scale performance. The test suite also compares 512 generated small
 problems with a separate exhaustive oracle, both uninterrupted and resumed.
+
+## Stage 1.3 clinical constraints and safety boundary
+
+`Problem.startDate` is an optional UTC midnight, and day indices are offsets from
+it. Clinical callers must supply it and a `slotRoles` entry per slot. The nullable
+fields preserve existing stage-1.2 synthetic callers; they are not a clinical
+mode. The constructor rejects non-midnight/non-UTC dates, previous dates on or
+after the start, role count mismatch, must/cannot intersections and personal
+maximum above the configurable clinical maximum (default 8). `Doctor` carries
+identity, group, optional typed K1–K4 senior level, position eligibility, must
+and cannot day indices, and previous duties. K-level is metadata only; it is not
+an optimization objective. The prototype's integer duty-balance objective remains
+only a placeholder, not the final AKYS clinical objective.
+
+When roles are provided, senior slots accept only seniors and junior slots only
+juniors. Must-duty days are checked on complete assignments, previous dates are
+checked using UTC calendar differences, and all earlier hard checks still apply.
+The independent validator separately applies these restrictions and checks all
+must duties, including on manually constructed assignments.
+
+**Junior-to-senior substitution is NOT implemented.** The restricted search can
+prove infeasibility, but there is no independently verifiable proof artifact or
+trusted two-phase authorization in the current model. Neither a boolean nor a
+serialized status is accepted as proof; the validator rejects junior assignments
+to senior slots unconditionally, including after a restricted infeasible result.
+Timeout or node budget is not a proof. To enable the feature safely, add a
+problem-bound, independently checkable unsatisfiability certificate or a trusted
+verifier that replays the complete restricted search, then implement a separate
+substitution-minimizing phase bound to the validated certificate. Until then this
+is a conservative, incomplete clinical prototype, not production-ready.
+
+Other missing decisions include substitution minimization, complete K-level
+hierarchy and ranking semantics, junior vacancy policy, advanced fairness and
+difficulty, real clinical snapshot migration, persistent checkpoints and
+worker/isolate integration. The synthetic benchmark is not a clinical-scale
+performance claim.

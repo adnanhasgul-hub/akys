@@ -29,6 +29,27 @@ class SolutionValidator {
       }
       if (slot >= days.length) continue;
       final day = days[slot], doctor = problem.doctors[id];
+      final role = problem.slotRoles?[slot];
+      if (role != null && !doctor.eligibleRoles.contains(role)) {
+        errors.add('${doctor.id}: pozisyon için uygun değil.');
+      }
+      if (role == DutyRole.senior && doctor.group != DutyGroup.senior) {
+        errors.add('${doctor.id}: kanıtlanmamış kıdemsiz geçişi yasak.');
+      }
+      if (role == DutyRole.junior && doctor.group != DutyGroup.junior) {
+        errors.add('${doctor.id}: kıdemsiz pozisyonu için grup uygun değil.');
+      }
+      if (problem.startDate != null &&
+          doctor.previousDuties.any(
+            (x) =>
+                problem.startDate!
+                    .add(Duration(days: day))
+                    .difference(x)
+                    .inDays <
+                3,
+          )) {
+        errors.add('${doctor.id}: önceki ay dinlenme aralığı ihlali.');
+      }
       if (doctor.unavailable.contains(day)) {
         errors.add('${doctor.id}: $day günü uygun değil.');
       }
@@ -41,6 +62,13 @@ class SolutionValidator {
         errors.add('${doctor.id}: en az üç gün aralık ihlali.');
       }
       previous.add(day);
+    }
+    for (var i = 0; i < problem.doctors.length; i++) {
+      for (final day in problem.doctors[i].must) {
+        if (!(dates[i] ?? []).contains(day)) {
+          errors.add('${problem.doctors[i].id}: zorunlu gün $day eksik.');
+        }
+      }
     }
     if (errors.isNotEmpty) return ValidationResult(errors, null);
     final sorted = [...counts]..sort();

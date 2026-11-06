@@ -1,32 +1,95 @@
 /// Standalone, exact enumerator for small synthetic schedules.
 /// Day numbers are consecutive calendar-day indices starting at zero.
+enum DutyGroup { senior, junior }
+
+enum DutyRole { senior, junior }
+
+enum SeniorityLevel { k1, k2, k3, k4 }
+
 class Doctor {
   Doctor({
     required this.id,
-    required this.maxDuties,
+    this.maxDuties = 8,
     Set<int> unavailable = const {},
-  }) : unavailable = Set.unmodifiable(unavailable) {
-    if (id.isEmpty || maxDuties < 0 || unavailable.any((d) => d < 0)) {
+    Set<int> must = const {},
+    this.group = DutyGroup.senior,
+    this.seniorityRank = 1,
+    this.seniorityLevel,
+    Set<DutyRole> eligibleRoles = const {DutyRole.senior, DutyRole.junior},
+    List<DateTime> previousDuties = const [],
+  }) : unavailable = Set.unmodifiable(unavailable),
+       must = Set.unmodifiable(must),
+       eligibleRoles = Set.unmodifiable(eligibleRoles),
+       previousDuties = List.unmodifiable(previousDuties) {
+    if (id.isEmpty ||
+        maxDuties < 0 ||
+        unavailable.any((d) => d < 0) ||
+        must.any((d) => d < 0) ||
+        seniorityRank < 1 ||
+        (seniorityLevel != null && group != DutyGroup.senior) ||
+        must.intersection(unavailable).isNotEmpty) {
       throw ArgumentError('Invalid doctor');
     }
   }
   final String id;
   final int maxDuties;
-  final Set<int> unavailable;
+  final Set<int> unavailable, must;
+  final DutyGroup group;
+  final int seniorityRank;
+  final SeniorityLevel? seniorityLevel;
+  final Set<DutyRole> eligibleRoles;
+  final List<DateTime> previousDuties;
 }
 
 class Problem {
-  Problem({required List<Doctor> doctors, required List<int> slotsPerDay})
-    : doctors = List.unmodifiable(doctors),
-      slotsPerDay = List.unmodifiable(slotsPerDay) {
+  Problem({
+    required List<Doctor> doctors,
+    required List<int> slotsPerDay,
+    this.startDate,
+    List<DutyRole>? slotRoles,
+    this.clinicMaxDuties = 8,
+  }) : doctors = List.unmodifiable(doctors),
+       slotsPerDay = List.unmodifiable(slotsPerDay),
+       slotRoles = slotRoles == null ? null : List.unmodifiable(slotRoles) {
     if (doctors.map((d) => d.id).toSet().length != doctors.length ||
         slotsPerDay.any((s) => s < 0) ||
-        slotsPerDay.isEmpty) {
+        slotsPerDay.isEmpty ||
+        clinicMaxDuties < 0 ||
+        doctors.any(
+          (d) =>
+              d.maxDuties > clinicMaxDuties ||
+              d.must.any((day) => day >= slotsPerDay.length),
+        ) ||
+        (slotRoles != null &&
+            slotRoles.length != slotsPerDay.fold<int>(0, (a, b) => a + b)) ||
+        (startDate != null &&
+            (!startDate!.isUtc ||
+                startDate!.hour != 0 ||
+                startDate!.minute != 0 ||
+                startDate!.second != 0 ||
+                startDate!.millisecond != 0 ||
+                startDate!.microsecond != 0)) ||
+        doctors.any((d) => d.previousDuties.isNotEmpty && startDate == null) ||
+        doctors.any(
+          (d) => d.previousDuties.any(
+            (x) =>
+                !x.isUtc ||
+                x.hour != 0 ||
+                x.minute != 0 ||
+                x.second != 0 ||
+                x.millisecond != 0 ||
+                x.microsecond != 0 ||
+                !x.isBefore(startDate!),
+          ),
+        )) {
       throw ArgumentError('Invalid problem');
     }
   }
   final List<Doctor> doctors;
   final List<int> slotsPerDay;
+  final DateTime? startDate;
+  final List<DutyRole>? slotRoles;
+  final int clinicMaxDuties;
   List<int> get slotDays => [
     for (var day = 0; day < slotsPerDay.length; day++)
       for (var i = 0; i < slotsPerDay[day]; i++) day,
@@ -37,10 +100,23 @@ class Problem {
         {
           'id': d.id,
           'maxDuties': d.maxDuties,
+          'group': d.group.name,
+          'seniorityRank': d.seniorityRank,
+          'seniorityLevel': d.seniorityLevel?.name ?? '',
+          'must': d.must.toList()..sort(),
+          'eligibleRoles': (d.eligibleRoles.map((r) => r.name).toList()
+            ..sort()),
+          'previousDuties': d.previousDuties
+              .map((x) => x.toIso8601String())
+              .toList(),
           'unavailable': d.unavailable.toList()..sort(),
         },
     ],
     'slotsPerDay': slotsPerDay,
+    'startDate': startDate?.toIso8601String() ?? '',
+    'slotRoles': slotRoles?.map((r) => r.name).toList() ?? <String>[],
+    'hasSlotRoles': slotRoles != null,
+    'clinicMaxDuties': clinicMaxDuties,
   };
   factory Problem.fromMessage(Map<String, dynamic> data) => Problem(
     doctors: [
@@ -49,9 +125,30 @@ class Problem {
           id: raw['id'] as String,
           maxDuties: raw['maxDuties'] as int,
           unavailable: Set<int>.from(raw['unavailable'] as List),
+          must: Set<int>.from(raw['must'] as List? ?? []),
+          group: DutyGroup.values.byName(raw['group'] as String? ?? 'senior'),
+          seniorityRank: raw['seniorityRank'] as int? ?? 1,
+          seniorityLevel: (raw['seniorityLevel'] as String? ?? '').isEmpty
+              ? null
+              : SeniorityLevel.values.byName(raw['seniorityLevel'] as String),
+          eligibleRoles: (raw['eligibleRoles'] as List? ?? ['senior', 'junior'])
+              .map((x) => DutyRole.values.byName(x as String))
+              .toSet(),
+          previousDuties: (raw['previousDuties'] as List? ?? [])
+              .map((x) => DateTime.parse(x as String))
+              .toList(),
         ),
     ],
     slotsPerDay: List<int>.from(data['slotsPerDay'] as List),
+    startDate: (data['startDate'] as String? ?? '').isEmpty
+        ? null
+        : DateTime.parse(data['startDate'] as String),
+    slotRoles: data['hasSlotRoles'] == true
+        ? (data['slotRoles'] as List)
+              .map((x) => DutyRole.values.byName(x as String))
+              .toList()
+        : null,
+    clinicMaxDuties: data['clinicMaxDuties'] as int? ?? 8,
   );
 }
 
@@ -119,6 +216,21 @@ class SearchSession {
   bool _allowed(int doctor, int depth) {
     final d = problem.doctors[doctor], day = _days[depth];
     if (d.unavailable.contains(day)) return false;
+    final role = problem.slotRoles?[depth];
+    if (role != null &&
+        (!d.eligibleRoles.contains(role) ||
+            (role == DutyRole.senior && d.group != DutyGroup.senior) ||
+            (role == DutyRole.junior && d.group != DutyGroup.junior))) {
+      return false;
+    }
+    if (problem.startDate != null &&
+        d.previousDuties.any(
+          (x) =>
+              problem.startDate!.add(Duration(days: day)).difference(x).inDays <
+              3,
+        )) {
+      return false;
+    }
     var count = 0;
     for (var i = 0; i < _prefix.length; i++) {
       if (_prefix[i] == doctor) {
@@ -225,10 +337,23 @@ class SearchSession {
       }
       final depth = _prefix.length;
       if (depth == _days.length) {
-        _evaluate();
+        if (problem.doctors.asMap().entries.every(
+          (entry) => entry.value.must.every(
+            (day) => List.generate(
+              _prefix.length,
+              (i) => i,
+            ).any((i) => _prefix[i] == entry.key && _days[i] == day),
+          ),
+        )) {
+          _evaluate();
+        }
         if (depth == 0) {
           _complete = true;
-          return SearchResult(SearchStatus.optimal, _best, visitedNodes);
+          return SearchResult(
+            _best == null ? SearchStatus.infeasible : SearchStatus.optimal,
+            _best,
+            visitedNodes,
+          );
         }
         _prefix.removeLast();
         continue;
