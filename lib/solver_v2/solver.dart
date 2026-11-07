@@ -354,6 +354,7 @@ class SearchSession {
     this.experimentalTwoPhase = false,
     this.clinicalBounds = false,
     this.profile,
+    this.onFirstIncumbent,
   }) : _phaseBOwner = null,
        _allowSubstitution = false,
        _days = problem.slotDays,
@@ -370,6 +371,7 @@ class SearchSession {
        experimentalTwoPhase = owner.experimentalTwoPhase,
        clinicalBounds = owner.clinicalBounds,
        profile = owner.profile,
+       onFirstIncumbent = owner.onFirstIncumbent,
        _phaseBOwner = owner,
        _allowSubstitution = true,
        _days = problem.slotDays,
@@ -383,6 +385,7 @@ class SearchSession {
   final bool experimentalTwoPhase;
   final bool clinicalBounds;
   final SearchProfile? profile;
+  final void Function(Solution)? onFirstIncumbent;
   bool _qualityPhase = false;
   int? qualityPhaseStartNode;
   final bool _allowSubstitution;
@@ -469,9 +472,11 @@ class SearchSession {
   int visitedNodes = 0;
   int incumbentImprovements = 0;
   int clinicalBoundChecks = 0, clinicalPruned = 0, clinicalBoundTicks = 0;
+  int mandatoryPruned = 0, feasibilityPruned = 0;
   int? firstFeasibleNode;
   bool _complete = false;
   bool _cancelled = false;
+  bool _running = false;
   void cancel() => _cancelled = true;
   Solution? get best => _best;
 
@@ -580,6 +585,18 @@ class SearchSession {
     return reject;
   }
 
+  bool _shouldPrune() {
+    if (earlyDeadEnds && _missedMandatoryDay()) {
+      mandatoryPruned++;
+      return true;
+    }
+    if (enablePruning && _prune()) {
+      feasibilityPruned++;
+      return true;
+    }
+    return _cannotBeatIncumbentPrefix();
+  }
+
   void _evaluate() {
     final counts = List<int>.filled(problem.doctors.length, 0);
     for (final p in _prefix) {
@@ -619,20 +636,34 @@ class SearchSession {
         profile!.qualityTicks += timer.elapsedTicks;
       }
       if (_best == null || clinical.compareTo(_best!.clinicalQuality!) < 0) {
+        final first = _best == null;
         firstFeasibleNode ??= visitedNodes;
         if (_best != null) incumbentImprovements++;
         _best = Solution(_prefix, q, clinicalQuality: clinical);
+        if (first) onFirstIncumbent?.call(_best!);
       }
     } else if (_best == null || _better(q, _best!.quality)) {
+      final first = _best == null;
       firstFeasibleNode ??= visitedNodes;
       if (_best != null) incumbentImprovements++;
       _best = candidate;
+      if (first) onFirstIncumbent?.call(_best!);
     }
   }
 
   /// [maxNodes] provides deterministic cooperative pauses. A deadline is a
   /// per-call safety limit, not a proof; it can yield different partial results.
   SearchResult run({required int maxNodes, Duration? timeLimit}) {
+    if (_running) throw StateError('Search session cannot be re-entered');
+    _running = true;
+    try {
+      return _runInternal(maxNodes: maxNodes, timeLimit: timeLimit);
+    } finally {
+      _running = false;
+    }
+  }
+
+  SearchResult _runInternal({required int maxNodes, Duration? timeLimit}) {
     if (maxNodes < 0 || (timeLimit != null && timeLimit.isNegative)) {
       throw ArgumentError('Invalid budget');
     }
@@ -774,9 +805,7 @@ class SearchSession {
       }
       if (allowed) {
         _prefix.add(candidate);
-        if ((earlyDeadEnds && _missedMandatoryDay()) ||
-            (enablePruning && _prune()) ||
-            _cannotBeatIncumbentPrefix()) {
+        if (_shouldPrune()) {
           _prefix.removeLast();
         } else {
           _next[depth + 1] = 0;
@@ -802,6 +831,7 @@ final class TransitionSession {
     this.experimentalTwoPhase = false,
     this.clinicalBounds = false,
     this.profile,
+    this.onFirstIncumbent,
   }) : problem = Problem.fromMessage(input.toMessage()) {
     if (problem.startDate == null || problem.slotRoles == null) {
       throw ArgumentError('Clinical date and roles required');
@@ -815,6 +845,7 @@ final class TransitionSession {
       experimentalTwoPhase: experimentalTwoPhase,
       clinicalBounds: clinicalBounds,
       profile: profile,
+      onFirstIncumbent: onFirstIncumbent,
     );
   }
   final Problem problem;
@@ -824,6 +855,7 @@ final class TransitionSession {
   final bool experimentalTwoPhase;
   final bool clinicalBounds;
   final SearchProfile? profile;
+  final void Function(Solution)? onFirstIncumbent;
   int? get qualityPhaseStartNode =>
       _substitution?.qualityPhaseStartNode ?? _restricted.qualityPhaseStartNode;
   int get clinicalBoundChecks =>
@@ -831,8 +863,17 @@ final class TransitionSession {
       (_substitution?.clinicalBoundChecks ?? 0);
   int get clinicalPruned =>
       _restricted.clinicalPruned + (_substitution?.clinicalPruned ?? 0);
+  int get mandatoryPruned =>
+      _restricted.mandatoryPruned + (_substitution?.mandatoryPruned ?? 0);
+  int get feasibilityPruned =>
+      _restricted.feasibilityPruned + (_substitution?.feasibilityPruned ?? 0);
   int get clinicalBoundTicks =>
       _restricted.clinicalBoundTicks + (_substitution?.clinicalBoundTicks ?? 0);
+
+  /// Strict incumbent replacements after each phase's first solution.
+  int get incumbentImprovements =>
+      _restricted.incumbentImprovements +
+      (_substitution?.incumbentImprovements ?? 0);
   late final SearchSession _restricted;
   SearchSession? _substitution;
   RestrictedVerdict _verdict = RestrictedVerdict.pending;
