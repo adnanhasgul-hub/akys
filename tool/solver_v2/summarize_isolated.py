@@ -45,14 +45,15 @@ def checkpoint(item, index):
         return marks[0]  # Exact terminal result; not a later observation.
     raise ValueError(f'Missing checkpoint: {item["snapshotKey"]}/{item["strategy"]}')
 
-lines = ['\n## 30/120-second results', '', '| Doctors / fixture | Strategy | First ms range | 30s filled | 120s filled | 120s nodes | Prefix prunes | Improvements | Status |', '|---|---|---|---|---|---|---|---|---|']
+lines = ['\n## 30/120-second results', '', '| Doctors / fixture | Strategy | First ms range | 30s filled | 120s filled | 120s nodes | Prefix prunes | Improvements | Peak RSS MiB | Status |', '|---|---|---|---|---|---|---|---|---|---|']
 for size, variant in fixtures:
     for strategy in strategies:
         items = [find(size, strategy, i) for i in (1, 2, 3)]
         last = [checkpoint(x, 1) for x in items]
         first = [x['firstMicros'] / 1000 if x['firstMicros'] is not None else None for x in items]
         pruned = [x['mandatoryPruned'] + x['feasibilityPruned'] + x['clinicalPruned'] for x in last]
-        lines.append(f"| {size} / {variant} | {strategy} | {value_range(first, lambda x: f'{x:.2f}')} | {value_range([checkpoint(x, 0)['optionalFilled'] for x in items])} | {value_range([x['optionalFilled'] for x in last])} | {value_range([x['visitedNodes'] for x in last])} | {value_range(pruned)} | {value_range([x['improvements'] for x in last])} | {','.join(sorted(set(x['status'] for x in last)))} |")
+        rss = [x['peakRssBytes'] / (1024 * 1024) if x['peakRssBytes'] is not None else None for x in last]
+        lines.append(f"| {size} / {variant} | {strategy} | {value_range(first, lambda x: f'{x:.2f}')} | {value_range([checkpoint(x, 0)['optionalFilled'] for x in items])} | {value_range([x['optionalFilled'] for x in last])} | {value_range([x['visitedNodes'] for x in last])} | {value_range(pruned)} | {value_range([x['improvements'] for x in last])} | {value_range(rss, lambda x: f'{x:.1f}')} | {','.join(sorted(set(x['status'] for x in last)))} |")
 lines += ['\n## Exact quality vectors, first repetition', '', '| Doctors | Strategy | First | 30s | 120s |', '|---:|---|---|---|---|']
 for size, _ in fixtures:
     for strategy in strategies:

@@ -8,6 +8,14 @@ import 'package:akys/solver_v2/solution_validator.dart';
 
 import 'quality_trace.dart' as fixtures;
 
+int? processRss({required bool peak}) {
+  try {
+    return peak ? ProcessInfo.maxRss : ProcessInfo.currentRss;
+  } on UnsupportedError {
+    return null;
+  }
+}
+
 void main(List<String> args) {
   if (args.length != 5) {
     throw ArgumentError('people days variant strategy repeat');
@@ -92,6 +100,8 @@ void main(List<String> args) {
       'feasibilityPruned': session.feasibilityPruned,
       'boundChecks': session.clinicalBoundChecks,
       'improvements': session.incumbentImprovements,
+      'currentRssBytes': processRss(peak: false),
+      'peakRssBytes': processRss(peak: true),
       'quality': current?.clinicalQuality?.components
           .map((x) => x.toString())
           .toList(),
