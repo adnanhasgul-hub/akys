@@ -1,4 +1,5 @@
 import 'clinical_quality.dart';
+import 'solution_validator.dart';
 
 /// Standalone, exact enumerator for small synthetic schedules.
 /// Day numbers are consecutive calendar-day indices starting at zero.
@@ -10,6 +11,16 @@ enum SlotRequirement { required, optional }
 
 /// Legacy mode is opt-in and must not be used as a clinical fallback.
 enum OptimizationMode { clinical, prototypeLegacy }
+
+/// Optional instrumentation; elapsed timings include stopwatch overhead.
+final class SearchProfile {
+  int completedLeaves = 0, validLeaves = 0, invalidLeaves = 0;
+  int qualityCalls = 0, qualityTicks = 0, hardCalls = 0, hardTicks = 0;
+  int firstValidationCalls = 0, firstValidationTicks = 0;
+  int emptyOptionalChoices = 0;
+  final Map<int, int> emptyOptionalByDepth = {};
+  final Map<int, int> postFirstNodesByDepth = {};
+}
 
 /// Sentinel used only for an unfilled optional slot.
 const int unfilledSlot = -1;
@@ -339,6 +350,8 @@ class SearchSession {
     this.mode = OptimizationMode.clinical,
     this.candidateOrdering = false,
     this.earlyDeadEnds = false,
+    this.experimentalTwoPhase = false,
+    this.profile,
   }) : _phaseBOwner = null,
        _allowSubstitution = false,
        _days = problem.slotDays,
@@ -352,6 +365,8 @@ class SearchSession {
   }) : mode = owner.mode,
        candidateOrdering = owner.candidateOrdering,
        earlyDeadEnds = owner.earlyDeadEnds,
+       experimentalTwoPhase = owner.experimentalTwoPhase,
+       profile = owner.profile,
        _phaseBOwner = owner,
        _allowSubstitution = true,
        _days = problem.slotDays,
@@ -362,6 +377,10 @@ class SearchSession {
   final bool enablePruning;
   final OptimizationMode mode;
   final bool candidateOrdering, earlyDeadEnds;
+  final bool experimentalTwoPhase;
+  final SearchProfile? profile;
+  bool _qualityPhase = false;
+  int? qualityPhaseStartNode;
   final bool _allowSubstitution;
   final TransitionSession? _phaseBOwner;
 
@@ -384,9 +403,13 @@ class SearchSession {
       return byCount != 0 ? byCount : a.compareTo(b);
     });
     return [
-      if (problem.slotRequirements[depth] == SlotRequirement.optional)
+      if (!_qualityPhase &&
+          problem.slotRequirements[depth] == SlotRequirement.optional)
         unfilledSlot,
       ...doctors,
+      if (_qualityPhase &&
+          problem.slotRequirements[depth] == SlotRequirement.optional)
+        unfilledSlot,
     ];
   }
 
@@ -413,6 +436,12 @@ class SearchSession {
   }
 
   void _validateMode() {
+    if (experimentalTwoPhase &&
+        (!usesClinicalQuality || !candidateOrdering || !earlyDeadEnds)) {
+      throw ArgumentError(
+        'Two-phase search requires clinical combined strategy',
+      );
+    }
     if (usesClinicalQuality &&
         (problem.startDate == null ||
             problem.slotRoles == null ||
@@ -544,6 +573,7 @@ class SearchSession {
     final candidate = Solution(_prefix, q);
     if (usesClinicalQuality) {
       final evaluator = const ClinicalQualityEvaluator();
+      final timer = profile == null ? null : (Stopwatch()..start());
       final clinical = _allowSubstitution
           ? evaluator.evaluatePhaseBCandidate(
               problem,
@@ -551,6 +581,11 @@ class SearchSession {
               session: _phaseBOwner!,
             )
           : evaluator.evaluate(problem, candidate);
+      if (timer != null) {
+        timer.stop();
+        profile!.qualityCalls++;
+        profile!.qualityTicks += timer.elapsedTicks;
+      }
       if (_best == null || clinical.compareTo(_best!.clinicalQuality!) < 0) {
         firstFeasibleNode ??= visitedNodes;
         if (_best != null) incumbentImprovements++;
@@ -605,15 +640,47 @@ class SearchSession {
       }
       final depth = _prefix.length;
       if (depth == _days.length) {
-        if (problem.doctors.asMap().entries.every(
+        final valid = problem.doctors.asMap().entries.every(
           (entry) => entry.value.must.every(
             (day) => List.generate(
               _prefix.length,
               (i) => i,
             ).any((i) => _prefix[i] == entry.key && _days[i] == day),
           ),
-        )) {
+        );
+        if (profile != null) {
+          profile!.completedLeaves++;
+          if (valid) {
+            profile!.validLeaves++;
+          } else {
+            profile!.invalidLeaves++;
+          }
+        }
+        if (valid) {
           _evaluate();
+          if (experimentalTwoPhase && !_qualityPhase && _best != null) {
+            final validationTimer = profile == null
+                ? null
+                : (Stopwatch()..start());
+            final check = const SolutionValidator().validate(
+              problem,
+              _best!,
+              localEvidence: _phaseBOwner,
+            );
+            if (validationTimer != null) {
+              validationTimer.stop();
+              profile!.firstValidationCalls++;
+              profile!.firstValidationTicks += validationTimer.elapsedTicks;
+            }
+            if (!check.isValid) {
+              throw StateError('Invalid first incumbent: ${check.errors}');
+            }
+            _qualityPhase = true;
+            qualityPhaseStartNode = visitedNodes;
+            _prefix.clear();
+            _next.fillRange(0, _next.length, 0);
+            continue;
+          }
         }
         if (depth == 0) {
           _complete = true;
@@ -653,7 +720,27 @@ class SearchSession {
           : index;
       visitedNodes++;
       stepNodes++;
-      if (candidate == unfilledSlot || _allowed(candidate, depth)) {
+      if (profile != null) {
+        if (candidate == unfilledSlot) {
+          profile!.emptyOptionalChoices++;
+          profile!.emptyOptionalByDepth[depth] =
+              (profile!.emptyOptionalByDepth[depth] ?? 0) + 1;
+        }
+        if (firstFeasibleNode != null) {
+          profile!.postFirstNodesByDepth[depth] =
+              (profile!.postFirstNodesByDepth[depth] ?? 0) + 1;
+        }
+      }
+      final hardTimer = profile != null && candidate != unfilledSlot
+          ? (Stopwatch()..start())
+          : null;
+      final allowed = candidate == unfilledSlot || _allowed(candidate, depth);
+      if (hardTimer != null) {
+        hardTimer.stop();
+        profile!.hardCalls++;
+        profile!.hardTicks += hardTimer.elapsedTicks;
+      }
+      if (allowed) {
         _prefix.add(candidate);
         if ((earlyDeadEnds && _missedMandatoryDay()) ||
             (enablePruning && _prune())) {
@@ -679,6 +766,8 @@ final class TransitionSession {
     this.mode = OptimizationMode.clinical,
     this.candidateOrdering = false,
     this.earlyDeadEnds = false,
+    this.experimentalTwoPhase = false,
+    this.profile,
   }) : problem = Problem.fromMessage(input.toMessage()) {
     if (problem.startDate == null || problem.slotRoles == null) {
       throw ArgumentError('Clinical date and roles required');
@@ -689,12 +778,18 @@ final class TransitionSession {
       mode: mode,
       candidateOrdering: candidateOrdering,
       earlyDeadEnds: earlyDeadEnds,
+      experimentalTwoPhase: experimentalTwoPhase,
+      profile: profile,
     );
   }
   final Problem problem;
   final bool enablePruning;
   final OptimizationMode mode;
   final bool candidateOrdering, earlyDeadEnds;
+  final bool experimentalTwoPhase;
+  final SearchProfile? profile;
+  int? get qualityPhaseStartNode =>
+      _substitution?.qualityPhaseStartNode ?? _restricted.qualityPhaseStartNode;
   late final SearchSession _restricted;
   SearchSession? _substitution;
   RestrictedVerdict _verdict = RestrictedVerdict.pending;

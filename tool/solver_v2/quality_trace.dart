@@ -23,7 +23,7 @@ Problem traceScenario(int people, int days, String variant) {
   }
   if (people < 6 ||
       ![30, 31].contains(days) ||
-      !['mixed', 'surplus', 'forced', 'ratio'].contains(variant)) {
+      !['mixed', 'surplus', 'forced', 'ratio', 'rank'].contains(variant)) {
     throw ArgumentError('invalid fixture');
   }
   final start = days == 30 ? DateTime.utc(2026, 11) : DateTime.utc(2026, 12);
@@ -77,6 +77,7 @@ Problem traceScenario(int people, int days, String variant) {
     doctors.add(
       Doctor(
         id: 'synthetic_$i',
+        seniorityRank: variant == 'rank' ? people - i : 1,
         group: senior ? DutyGroup.senior : DutyGroup.junior,
         seniorityLevel: senior ? SeniorityLevel.values[i % 4] : null,
         maxDuties: i < 4
@@ -147,8 +148,8 @@ Map<String, Object?> summarize(Problem p, Solution? s) {
 }
 
 void main(List<String> args) {
-  if (args.length != 5) {
-    stderr.writeln('expected people days variant strategy seconds');
+  if (args.length < 5 || args.length > 6) {
+    stderr.writeln('expected people days variant strategy seconds [profile]');
     exit(64);
   }
   final people = int.parse(args[0]),
@@ -156,7 +157,13 @@ void main(List<String> args) {
       variant = args[2],
       strategy = args[3],
       seconds = int.parse(args[4]);
-  if (!['baseline', 'ordering', 'deadends', 'combined'].contains(strategy) ||
+  if (![
+        'baseline',
+        'ordering',
+        'deadends',
+        'combined',
+        'twophase',
+      ].contains(strategy) ||
       seconds <= 0) {
     throw ArgumentError('invalid');
   }
@@ -165,10 +172,21 @@ void main(List<String> args) {
       !const SolutionValidator().validate(p, witness(p)).isValid) {
     throw StateError('invalid fixture witness');
   }
+  final profile = args.length == 6 && args[5] == 'profile'
+      ? SearchProfile()
+      : null;
   final session = TransitionSession(
     p,
-    candidateOrdering: strategy == 'ordering' || strategy == 'combined',
-    earlyDeadEnds: strategy == 'deadends' || strategy == 'combined',
+    candidateOrdering:
+        strategy == 'ordering' ||
+        strategy == 'combined' ||
+        strategy == 'twophase',
+    earlyDeadEnds:
+        strategy == 'deadends' ||
+        strategy == 'combined' ||
+        strategy == 'twophase',
+    experimentalTwoPhase: strategy == 'twophase',
+    profile: profile,
   );
   final watch = Stopwatch()..start();
   final events = <Map<String, Object?>>[], marks = <Map<String, Object?>>[];
@@ -222,6 +240,27 @@ void main(List<String> args) {
       'strategy': strategy,
       'seconds': seconds,
       'runtime': Platform.version,
+      'qualityPhaseStartNode': session.qualityPhaseStartNode,
+      if (profile != null)
+        'profile': {
+          'completedLeaves': profile.completedLeaves,
+          'validLeaves': profile.validLeaves,
+          'invalidLeaves': profile.invalidLeaves,
+          'qualityCalls': profile.qualityCalls,
+          'qualityTicks': profile.qualityTicks,
+          'firstValidationCalls': profile.firstValidationCalls,
+          'firstValidationTicks': profile.firstValidationTicks,
+          'hardCalls': profile.hardCalls,
+          'hardTicks': profile.hardTicks,
+          'stopwatchFrequency': Stopwatch().frequency,
+          'emptyOptionalChoices': profile.emptyOptionalChoices,
+          'emptyOptionalByDepth': profile.emptyOptionalByDepth.map(
+            (k, v) => MapEntry(k.toString(), v),
+          ),
+          'postFirstNodesByDepth': profile.postFirstNodesByDepth.map(
+            (k, v) => MapEntry(k.toString(), v),
+          ),
+        },
       'snapshot': session.problem.toMessage(),
       'events': events,
       'marks': marks,
