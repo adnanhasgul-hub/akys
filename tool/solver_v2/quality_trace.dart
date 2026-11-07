@@ -163,6 +163,7 @@ void main(List<String> args) {
         'deadends',
         'combined',
         'twophase',
+        'bounded',
       ].contains(strategy) ||
       seconds <= 0) {
     throw ArgumentError('invalid');
@@ -180,12 +181,15 @@ void main(List<String> args) {
     candidateOrdering:
         strategy == 'ordering' ||
         strategy == 'combined' ||
-        strategy == 'twophase',
+        strategy == 'twophase' ||
+        strategy == 'bounded',
     earlyDeadEnds:
         strategy == 'deadends' ||
         strategy == 'combined' ||
-        strategy == 'twophase',
-    experimentalTwoPhase: strategy == 'twophase',
+        strategy == 'twophase' ||
+        strategy == 'bounded',
+    experimentalTwoPhase: strategy == 'twophase' || strategy == 'bounded',
+    clinicalBounds: strategy == 'bounded',
     profile: profile,
   );
   final watch = Stopwatch()..start();
@@ -223,6 +227,10 @@ void main(List<String> args) {
         'status': result.status.name,
         'stage': stageBefore.name,
         'nodes': result.visitedNodes,
+        'boundChecks': session.clinicalBoundChecks,
+        'boundPruned': session.clinicalPruned,
+        'boundTicks': session.clinicalBoundTicks,
+        'stopwatchFrequency': Stopwatch().frequency,
         'optimalityProven': result.status == SearchStatus.optimal,
         'restrictedVerdict': session.restrictedVerdict.name,
         ...summarize(session.problem, previous),

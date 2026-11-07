@@ -1,4 +1,5 @@
 import 'clinical_quality.dart';
+import 'clinical_bounds.dart';
 import 'solution_validator.dart';
 
 /// Standalone, exact enumerator for small synthetic schedules.
@@ -351,6 +352,7 @@ class SearchSession {
     this.candidateOrdering = false,
     this.earlyDeadEnds = false,
     this.experimentalTwoPhase = false,
+    this.clinicalBounds = false,
     this.profile,
   }) : _phaseBOwner = null,
        _allowSubstitution = false,
@@ -366,6 +368,7 @@ class SearchSession {
        candidateOrdering = owner.candidateOrdering,
        earlyDeadEnds = owner.earlyDeadEnds,
        experimentalTwoPhase = owner.experimentalTwoPhase,
+       clinicalBounds = owner.clinicalBounds,
        profile = owner.profile,
        _phaseBOwner = owner,
        _allowSubstitution = true,
@@ -378,6 +381,7 @@ class SearchSession {
   final OptimizationMode mode;
   final bool candidateOrdering, earlyDeadEnds;
   final bool experimentalTwoPhase;
+  final bool clinicalBounds;
   final SearchProfile? profile;
   bool _qualityPhase = false;
   int? qualityPhaseStartNode;
@@ -436,6 +440,9 @@ class SearchSession {
   }
 
   void _validateMode() {
+    if (clinicalBounds && !usesClinicalQuality) {
+      throw ArgumentError('Clinical bounds require clinical mode');
+    }
     if (experimentalTwoPhase &&
         (!usesClinicalQuality || !candidateOrdering || !earlyDeadEnds)) {
       throw ArgumentError(
@@ -461,6 +468,7 @@ class SearchSession {
   Solution? _best;
   int visitedNodes = 0;
   int incumbentImprovements = 0;
+  int clinicalBoundChecks = 0, clinicalPruned = 0, clinicalBoundTicks = 0;
   int? firstFeasibleNode;
   bool _complete = false;
   bool _cancelled = false;
@@ -546,6 +554,30 @@ class SearchSession {
       if (a[i] != b[i]) return a[i] < b[i];
     }
     return false;
+  }
+
+  bool _cannotBeatIncumbentPrefix() {
+    if (!clinicalBounds || _best == null) return false;
+    final timer = Stopwatch()..start();
+    final optimistic = optimisticClinicalPrefix(
+      problem,
+      _prefix,
+      allowSubstitution: _allowSubstitution,
+    );
+    var reject = false;
+    for (var i = 0; i < optimistic.length; i++) {
+      final order = Exact.integer(optimistic[i])
+          .compareTo(_best!.clinicalQuality!.components[i]);
+      if (order != 0) {
+        reject = order > 0;
+        break;
+      }
+    }
+    timer.stop();
+    clinicalBoundChecks++;
+    clinicalBoundTicks += timer.elapsedTicks;
+    if (reject) clinicalPruned++;
+    return reject;
   }
 
   void _evaluate() {
@@ -743,7 +775,8 @@ class SearchSession {
       if (allowed) {
         _prefix.add(candidate);
         if ((earlyDeadEnds && _missedMandatoryDay()) ||
-            (enablePruning && _prune())) {
+            (enablePruning && _prune()) ||
+            _cannotBeatIncumbentPrefix()) {
           _prefix.removeLast();
         } else {
           _next[depth + 1] = 0;
@@ -767,6 +800,7 @@ final class TransitionSession {
     this.candidateOrdering = false,
     this.earlyDeadEnds = false,
     this.experimentalTwoPhase = false,
+    this.clinicalBounds = false,
     this.profile,
   }) : problem = Problem.fromMessage(input.toMessage()) {
     if (problem.startDate == null || problem.slotRoles == null) {
@@ -779,6 +813,7 @@ final class TransitionSession {
       candidateOrdering: candidateOrdering,
       earlyDeadEnds: earlyDeadEnds,
       experimentalTwoPhase: experimentalTwoPhase,
+      clinicalBounds: clinicalBounds,
       profile: profile,
     );
   }
@@ -787,9 +822,17 @@ final class TransitionSession {
   final OptimizationMode mode;
   final bool candidateOrdering, earlyDeadEnds;
   final bool experimentalTwoPhase;
+  final bool clinicalBounds;
   final SearchProfile? profile;
   int? get qualityPhaseStartNode =>
       _substitution?.qualityPhaseStartNode ?? _restricted.qualityPhaseStartNode;
+  int get clinicalBoundChecks =>
+      _restricted.clinicalBoundChecks +
+      (_substitution?.clinicalBoundChecks ?? 0);
+  int get clinicalPruned =>
+      _restricted.clinicalPruned + (_substitution?.clinicalPruned ?? 0);
+  int get clinicalBoundTicks =>
+      _restricted.clinicalBoundTicks + (_substitution?.clinicalBoundTicks ?? 0);
   late final SearchSession _restricted;
   SearchSession? _substitution;
   RestrictedVerdict _verdict = RestrictedVerdict.pending;
