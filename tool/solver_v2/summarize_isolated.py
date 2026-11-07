@@ -12,11 +12,16 @@ output = pathlib.Path(sys.argv[2])
 fixtures = [(6, 'mixed'), (10, 'ratio'), (15, 'surplus'), (20, 'rank')]
 strategies = ('deadends', 'combined', 'twophase', 'bounded')
 runs, snapshots = [], {}
+revision = None
 for size, variant in fixtures:
     for strategy in strategies:
         for rep in (1, 2, 3):
             path = root / f'{size}-{variant}-{strategy}-{rep}.json'
             item = json.loads(path.read_text())
+            if revision is None:
+                revision = item['sourceRevision']
+            elif item['sourceRevision'] != revision:
+                raise ValueError(f'source revision mismatch: {path}')
             snapshot = item.pop('snapshot')
             key = f'{size}-{variant}'
             if key in snapshots and snapshots[key] != snapshot:
@@ -75,5 +80,5 @@ with (output / 'summary.md').open('w') as f:
     f.write('\n'.join(lines) + '\n')
 with (output / 'traces.json.gz').open('wb') as raw:
     with gzip.GzipFile(filename='', mode='wb', fileobj=raw, mtime=0, compresslevel=9) as f:
-        f.write(json.dumps({'snapshots': snapshots, 'runs': runs}, separators=(',', ':')).encode())
+        f.write(json.dumps({'sourceRevision': revision, 'snapshots': snapshots, 'runs': runs}, separators=(',', ':')).encode())
 print(f'{len(runs)} runs, {len(snapshots)} snapshots')

@@ -21,6 +21,11 @@ void main(List<String> args) {
     throw ArgumentError('strategy');
   }
   final problem = fixtures.traceScenario(people, days, variant);
+  final revisionResult = Process.runSync('git', ['rev-parse', 'HEAD']);
+  if (revisionResult.exitCode != 0) {
+    throw StateError('Cannot determine source revision');
+  }
+  final sourceRevision = (revisionResult.stdout as String).trim();
   if (!const SolutionValidator()
       .validate(problem, fixtures.witness(problem))
       .isValid) {
@@ -111,6 +116,7 @@ void main(List<String> args) {
       'seed': fixtures.scenarioSeed,
       'strategy': strategy,
       'repeat': repeat,
+      'sourceRevision': sourceRevision,
       'runtime': Platform.version,
       'firstMicros': firstMicros,
       'firstQuality': first?.clinicalQuality?.components
