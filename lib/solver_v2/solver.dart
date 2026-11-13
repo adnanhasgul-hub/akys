@@ -353,6 +353,7 @@ class SearchSession {
     this.earlyDeadEnds = false,
     this.experimentalTwoPhase = false,
     this.clinicalBounds = false,
+    this.forwardChecking = false,
     this.profile,
     this.onFirstIncumbent,
   }) : _phaseBOwner = null,
@@ -370,6 +371,7 @@ class SearchSession {
        earlyDeadEnds = owner.earlyDeadEnds,
        experimentalTwoPhase = owner.experimentalTwoPhase,
        clinicalBounds = owner.clinicalBounds,
+       forwardChecking = owner.forwardChecking,
        profile = owner.profile,
        onFirstIncumbent = owner.onFirstIncumbent,
        _phaseBOwner = owner,
@@ -384,6 +386,7 @@ class SearchSession {
   final bool candidateOrdering, earlyDeadEnds;
   final bool experimentalTwoPhase;
   final bool clinicalBounds;
+  final bool forwardChecking;
   final SearchProfile? profile;
   final void Function(Solution)? onFirstIncumbent;
   bool _qualityPhase = false;
@@ -510,6 +513,47 @@ class SearchSession {
     return count < d.maxDuties;
   }
 
+  // Necessary, optimistic domains only: never reserve a future candidate for
+  // another slot. Empty domains prove this prefix impossible; nonempty domains
+  // do not establish simultaneous feasibility. A/B roles remain in _allowed.
+  bool _emptyRequiredDomain() {
+    final watch = Stopwatch()..start();
+    forwardChecks++;
+    try {
+      for (var slot = _prefix.length; slot < _days.length; slot++) {
+        if (problem.slotRequirements[slot] != SlotRequirement.required) {
+          continue;
+        }
+        final day = _days[slot];
+        var possible = false;
+        for (var doctor = 0; doctor < problem.doctors.length; doctor++) {
+          if (!_allowed(doctor, slot)) continue;
+          // Must dates are fixed hard obligations, not guessed assignments.
+          // Assigning this day cannot erase an obligation on a nearby other day.
+          if (problem.doctors[doctor].must.any(
+            (mustDay) => mustDay != day && (mustDay - day).abs() < 3,
+          )) {
+            continue;
+          }
+          possible = true;
+          break;
+        }
+        if (!possible) {
+          forwardPruned++;
+          return true;
+        }
+      }
+      return false;
+    } finally {
+      watch.stop();
+      forwardCheckTicks += watch.elapsedTicks;
+    }
+  }
+
+  int forwardChecks = 0, forwardPruned = 0, forwardCheckTicks = 0;
+  int forwardRootPruned = 0;
+  bool _forwardRootChecked = false;
+
   // Relax spacing and availability: this enlarges the feasible set, so the
   // resulting load bounds can never be greater than a real completion's score.
   bool _prune() {
@@ -586,6 +630,7 @@ class SearchSession {
   }
 
   bool _shouldPrune() {
+    if (forwardChecking && _emptyRequiredDomain()) return true;
     if (earlyDeadEnds && _missedMandatoryDay()) {
       mandatoryPruned++;
       return true;
@@ -700,6 +745,15 @@ class SearchSession {
           visitedNodes,
           pauseReason: PauseReason.nodeBudget,
         );
+      }
+      // Honor cancellation/deadline/node-budget before starting the atomic check.
+      if (forwardChecking && !_forwardRootChecked) {
+        _forwardRootChecked = true;
+        if (_emptyRequiredDomain()) {
+          forwardRootPruned++;
+          _complete = true;
+          return SearchResult(SearchStatus.infeasible, null, visitedNodes);
+        }
       }
       final depth = _prefix.length;
       if (depth == _days.length) {
@@ -830,6 +884,7 @@ final class TransitionSession {
     this.earlyDeadEnds = false,
     this.experimentalTwoPhase = false,
     this.clinicalBounds = false,
+    this.forwardChecking = false,
     this.profile,
     this.onFirstIncumbent,
   }) : problem = Problem.fromMessage(input.toMessage()) {
@@ -844,6 +899,7 @@ final class TransitionSession {
       earlyDeadEnds: earlyDeadEnds,
       experimentalTwoPhase: experimentalTwoPhase,
       clinicalBounds: clinicalBounds,
+      forwardChecking: forwardChecking,
       profile: profile,
       onFirstIncumbent: onFirstIncumbent,
     );
@@ -854,6 +910,7 @@ final class TransitionSession {
   final bool candidateOrdering, earlyDeadEnds;
   final bool experimentalTwoPhase;
   final bool clinicalBounds;
+  final bool forwardChecking;
   final SearchProfile? profile;
   final void Function(Solution)? onFirstIncumbent;
   int? get qualityPhaseStartNode =>
@@ -869,6 +926,18 @@ final class TransitionSession {
       _restricted.feasibilityPruned + (_substitution?.feasibilityPruned ?? 0);
   int get clinicalBoundTicks =>
       _restricted.clinicalBoundTicks + (_substitution?.clinicalBoundTicks ?? 0);
+
+  /// Cumulative across A and B; SearchResult.visitedNodes is phase-local.
+  int get totalVisitedNodes =>
+      _restricted.visitedNodes + (_substitution?.visitedNodes ?? 0);
+  int get forwardChecks =>
+      _restricted.forwardChecks + (_substitution?.forwardChecks ?? 0);
+  int get forwardPruned =>
+      _restricted.forwardPruned + (_substitution?.forwardPruned ?? 0);
+  int get forwardRootPruned =>
+      _restricted.forwardRootPruned + (_substitution?.forwardRootPruned ?? 0);
+  int get forwardCheckTicks =>
+      _restricted.forwardCheckTicks + (_substitution?.forwardCheckTicks ?? 0);
 
   /// Strict incumbent replacements after each phase's first solution.
   int get incumbentImprovements =>
