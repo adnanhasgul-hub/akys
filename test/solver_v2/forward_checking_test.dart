@@ -248,6 +248,43 @@ void main() {
     expect(c.run(maxNodes: 100).status, SearchStatus.cancelled);
     expect(c.forwardChecks, 0);
   });
+  test('B cannot grant a junior an ineligible senior role', () {
+    final p = problem(
+      [
+        Doctor(
+          id: 'j',
+          group: DutyGroup.junior,
+          eligibleRoles: {DutyRole.junior},
+        ),
+      ],
+      [1],
+    );
+    oracleCheck(p);
+    final s = session(p, true), r = checks.finish(s);
+    expect(r.status, SearchStatus.infeasible);
+    expect(s.forwardRootPruned, 2);
+  });
+  test('B can satisfy a junior must through an optional senior slot', () {
+    final p = problem(
+      [
+        Doctor(id: 'j', group: DutyGroup.junior, must: {0}),
+      ],
+      [1],
+      requirements: [SlotRequirement.optional],
+    );
+    oracleCheck(p);
+    final s = session(p, true), r = checks.finish(s);
+    expect(s.restrictedVerdict, RestrictedVerdict.provenInfeasible);
+    expect(r.status, SearchStatus.optimal);
+    expect(r.best!.assignments, [0]);
+    expect(s.forwardRootPruned, 0);
+    expect(
+      const SolutionValidator()
+          .validate(s.problem, r.best!, localEvidence: s)
+          .permanentApprovalAllowed,
+      false,
+    );
+  });
   test('default remains disabled', () {
     final s = TransitionSession(problem([senior('s')], [1]));
     checks.finish(s);
