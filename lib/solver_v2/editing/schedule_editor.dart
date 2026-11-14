@@ -41,7 +41,7 @@ final class EditIssue {
 }
 
 /// Locks are independent slot->doctor data, suitable for a future optimization adapter.
-/// They are not automatically translated to solver constraints in this stage.
+/// ReoptimizationRequest.fromEditor explicitly snapshots them as solver constraints.
 final class EditedSchedule {
   EditedSchedule._(
     List<int> assignments,
@@ -170,6 +170,13 @@ final class ScheduleEditor {
   });
   EditResult unlock(int slot) => _change((a, locks) {
     _slot(slot);
+    if (problem.fixedAssignments.containsKey(slot)) {
+      throw EditIssue(
+        EditCode.locked,
+        'Sabit snapshot değiştirilemez; kaynak taslakta kilidi kaldırıp yeni istek oluşturun.',
+        slot: slot,
+      );
+    }
     locks.remove(slot);
   });
 
@@ -186,7 +193,7 @@ final class ScheduleEditor {
   }
 
   void _unlocked(int slot, Map<int, int> locks) {
-    if (locks.containsKey(slot)) {
+    if (locks.containsKey(slot) || problem.fixedAssignments.containsKey(slot)) {
       throw EditIssue(
         EditCode.locked,
         'Önce atamanın kilidini kaldırın.',
@@ -240,6 +247,17 @@ final class ScheduleEditor {
         counts = List.filled(problem.doctors.length, 0);
     final dates = <int, List<int>>{};
     var substitutions = 0;
+    for (final fixed in problem.fixedAssignments.entries) {
+      if (a[fixed.key] != fixed.value) {
+        issues.add(
+          EditIssue(
+            EditCode.locked,
+            'Snapshot içindeki sabit atama korunmalı.',
+            slot: fixed.key,
+          ),
+        );
+      }
+    }
     void issue(EditCode code, String message, int slot, [int? doctor]) =>
         issues.add(
           EditIssue(

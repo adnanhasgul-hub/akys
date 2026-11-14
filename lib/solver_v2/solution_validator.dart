@@ -93,6 +93,12 @@ class SolutionValidator {
         'Slot sayısı eşleşmiyor: ${solution.assignments.length}/${days.length}.',
       );
     }
+    for (final fixed in problem.fixedAssignments.entries) {
+      if (fixed.key >= solution.assignments.length ||
+          solution.assignments[fixed.key] != fixed.value) {
+        errors.add('Kilitli pozisyon değiştirilemez: slot ${fixed.key}.');
+      }
+    }
     final counts = List<int>.filled(problem.doctors.length, 0);
     final dates = <int, List<int>>{};
     for (var slot = 0; slot < solution.assignments.length; slot++) {

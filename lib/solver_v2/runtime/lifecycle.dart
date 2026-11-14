@@ -115,6 +115,7 @@ final class OptimizationController {
   OptimizationSnapshot get value => _value;
   Stream<OptimizationSnapshot> get events => _events.stream;
   WorkerConnection? _worker;
+  Problem? _problem;
   final _pendingSpawns = <Future<WorkerConnection>>{};
   StreamSubscription<Map<String, Object?>>? _subscription;
   int _generation = 0, _workerSequence = -1;
@@ -142,7 +143,9 @@ final class OptimizationController {
       return;
     }
     try {
-      final input = Problem.fromMessage(problem.toMessage()).toMessage();
+      final snapshot = Problem.fromMessage(problem.toMessage());
+      _problem = snapshot;
+      final input = snapshot.toMessage();
       final settings = options.toMessage();
       final pending = backend.createWorker();
       _pendingSpawns.add(pending);
@@ -258,10 +261,9 @@ final class OptimizationController {
         throw StateError('Missing trusted B-stage observation');
       }
       if (best == null ||
-          incoming.clinicalQuality!.compareTo(best.clinicalQuality!) < 0) {
+          _problem!.compareClinicalCandidates(incoming, best) < 0) {
         best = incoming;
-      } else if (incoming.clinicalQuality!.compareTo(best.clinicalQuality!) >
-          0) {
+      } else if (_problem!.compareClinicalCandidates(incoming, best) > 0) {
         throw StateError('Worse incumbent from worker');
       }
     }

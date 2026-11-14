@@ -92,7 +92,13 @@ final class Problem {
     List<SlotRequirement>? slotRequirements,
     List<DayDifficulty>? dayDifficulties,
     this.clinicMaxDuties = 8,
-  }) : doctors = List.unmodifiable(doctors),
+    Map<int, int> fixedAssignments = const {},
+    List<int>? referenceAssignments,
+  }) : fixedAssignments = Map.unmodifiable(fixedAssignments),
+       referenceAssignments = referenceAssignments == null
+           ? null
+           : List.unmodifiable(referenceAssignments),
+       doctors = List.unmodifiable(doctors),
        slotsPerDay = List.unmodifiable(slotsPerDay),
        hasExplicitSlotRequirements = slotRequirements != null,
        slotRoles = slotRoles == null ? null : List.unmodifiable(slotRoles),
@@ -160,6 +166,21 @@ final class Problem {
         )) {
       throw ArgumentError('Invalid problem');
     }
+    final slots = slotDays.length;
+    if (fixedAssignments.entries.any(
+          (e) =>
+              e.key < 0 ||
+              e.key >= slots ||
+              e.value < 0 ||
+              e.value >= doctors.length,
+        ) ||
+        (referenceAssignments != null &&
+            (referenceAssignments.length != slots ||
+                referenceAssignments.any(
+                  (d) => d < unfilledSlot || d >= doctors.length,
+                )))) {
+      throw ArgumentError('Invalid fixed/reference assignments');
+    }
   }
   final List<Doctor> doctors;
   final List<int> slotsPerDay;
@@ -169,6 +190,33 @@ final class Problem {
   final bool hasExplicitSlotRequirements;
   final List<DayDifficulty>? dayDifficulties;
   final int clinicMaxDuties;
+
+  /// Exact slot->doctor hard restrictions, including occupied OPTIONAL slots.
+  final Map<int, int> fixedAssignments;
+
+  /// Optional final tie-break only, never part of the 19 clinical components.
+  final List<int>? referenceAssignments;
+  int changedSlotCount(List<int> assignments) {
+    final reference = referenceAssignments;
+    if (reference == null) return 0;
+    if (assignments.length != reference.length) {
+      throw ArgumentError('Slot count mismatch');
+    }
+    var changed = 0;
+    for (var i = 0; i < assignments.length; i++) {
+      if (reference[i] != assignments[i]) changed++;
+    }
+    return changed;
+  }
+
+  int compareClinicalCandidates(Solution a, Solution b) {
+    final order = a.clinicalQuality!.compareTo(b.clinicalQuality!);
+    return order != 0
+        ? order
+        : changedSlotCount(a.assignments)
+              .compareTo(changedSlotCount(b.assignments));
+  }
+
   DateTime dateForDay(int day) {
     if (startDate == null || day < 0 || day >= slotsPerDay.length) {
       throw RangeError('Clinical day/date unavailable');
@@ -212,6 +260,10 @@ final class Problem {
     'slotRequirements': slotRequirements.map((r) => r.name).toList(),
     'hasExplicitSlotRequirements': hasExplicitSlotRequirements,
     'clinicMaxDuties': clinicMaxDuties,
+    'fixedAssignments': {
+      for (final e in fixedAssignments.entries) '${e.key}': e.value,
+    },
+    'referenceAssignments': ?referenceAssignments,
     'hasDayDifficulties': dayDifficulties != null,
     'dayDifficulties':
         dayDifficulties?.map((d) => d.toMessage()).toList() ?? [],
@@ -247,6 +299,13 @@ final class Problem {
               .toList()
         : null,
     clinicMaxDuties: data['clinicMaxDuties'] as int? ?? 8,
+    fixedAssignments: {
+      for (final e in (data['fixedAssignments'] as Map? ?? {}).entries)
+        int.parse(e.key as String): e.value as int,
+    },
+    referenceAssignments: data['referenceAssignments'] == null
+        ? null
+        : List<int>.from(data['referenceAssignments'] as List),
     slotRequirements: data['hasExplicitSlotRequirements'] == false
         ? null
         : (data['slotRequirements'] as List?)
@@ -446,6 +505,9 @@ class SearchSession {
   }
 
   void _validateMode() {
+    if (problem.referenceAssignments != null && !usesClinicalQuality) {
+      throw ArgumentError('Reference tie-break requires clinical mode');
+    }
     if (clinicalBounds && !usesClinicalQuality) {
       throw ArgumentError('Clinical bounds require clinical mode');
     }
@@ -484,6 +546,8 @@ class SearchSession {
   Solution? get best => _best;
 
   bool _allowed(int doctor, int depth) {
+    final fixed = problem.fixedAssignments[depth];
+    if (fixed != null && fixed != doctor) return false;
     final d = problem.doctors[doctor], day = _days[depth];
     if (d.unavailable.contains(day)) return false;
     final role = problem.slotRoles?[depth];
@@ -680,7 +744,15 @@ class SearchSession {
         profile!.qualityCalls++;
         profile!.qualityTicks += timer.elapsedTicks;
       }
-      if (_best == null || clinical.compareTo(_best!.clinicalQuality!) < 0) {
+      final clinicalOrder = _best == null
+          ? -1
+          : clinical.compareTo(_best!.clinicalQuality!);
+      final closerReference =
+          clinicalOrder == 0 &&
+          problem.referenceAssignments != null &&
+          problem.changedSlotCount(_prefix) <
+              problem.changedSlotCount(_best!.assignments);
+      if (_best == null || clinicalOrder < 0 || closerReference) {
         final first = _best == null;
         firstFeasibleNode ??= visitedNodes;
         if (_best != null) incumbentImprovements++;
@@ -851,7 +923,9 @@ class SearchSession {
       final hardTimer = profile != null && candidate != unfilledSlot
           ? (Stopwatch()..start())
           : null;
-      final allowed = candidate == unfilledSlot || _allowed(candidate, depth);
+      final allowed = candidate == unfilledSlot
+          ? !problem.fixedAssignments.containsKey(depth)
+          : _allowed(candidate, depth);
       if (hardTimer != null) {
         hardTimer.stop();
         profile!.hardCalls++;

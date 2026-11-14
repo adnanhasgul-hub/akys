@@ -198,7 +198,7 @@ final class _Engine {
             throw StateError('Invalid incumbent: ${checked.errors}');
           }
           if (incumbent != null &&
-              best.clinicalQuality!.compareTo(incumbent!.clinicalQuality!) >=
+              session!.problem.compareClinicalCandidates(best, incumbent!) >=
                   0) {
             throw StateError('Non-improving incumbent');
           }
