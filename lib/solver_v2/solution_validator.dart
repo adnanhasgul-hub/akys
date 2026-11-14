@@ -20,6 +20,24 @@ class ValidationResult {
   bool get isValid => errors.isEmpty;
 }
 
+/// Structural inspection of an UNTRUSTED transferred preview, not authorization.
+/// A junior in a senior role is reported as an unresolved proof obligation.
+/// Cannot be used as TransitionSession evidence or durable approval.
+final class CandidateInspection {
+  CandidateInspection._(
+    List<String> errors,
+    List<int>? quality,
+    this.substitutionCount,
+  ) : errors = List.unmodifiable(errors),
+      prototypeQuality = quality == null ? null : List.unmodifiable(quality);
+  final List<String> errors;
+  final List<int>? prototypeQuality;
+  final int substitutionCount;
+  bool get structuralConstraintsSatisfied => errors.isEmpty;
+  bool get requiresTransitionProof => substitutionCount > 0;
+  bool get permanentApprovalAllowed => false;
+}
+
 /// Independent of the search implementation and its incremental checks.
 class SolutionValidator {
   const SolutionValidator();
@@ -86,6 +104,29 @@ class SolutionValidator {
     TransitionSession? localEvidence,
     bool candidateOnly = false,
   }) {
+    final inspection = inspectTransferredCandidate(problem, solution);
+    final errors = [...inspection.errors];
+    if (inspection.requiresTransitionProof &&
+        (localEvidence == null ||
+            (candidateOnly
+                ? !localEvidence.permitsPhaseBCandidate(problem)
+                : !localEvidence.verifiesLocalTransition(problem, solution)))) {
+      errors.add('Kanıtlanmamış kıdemsiz geçişi yasak.');
+    }
+    return ValidationResult(
+      errors,
+      inspection.prototypeQuality,
+      substitutionCount: inspection.substitutionCount,
+      candidateOnly: candidateOnly,
+    );
+  }
+
+  /// Checks every assignment constraint except the separate transition-proof
+  /// obligation. This distinct result type never authorizes a B solution.
+  CandidateInspection inspectTransferredCandidate(
+    Problem problem,
+    Solution solution,
+  ) {
     var substitutions = 0;
     final errors = <String>[], days = problem.slotDays;
     if (solution.assignments.length != days.length) {
@@ -121,12 +162,6 @@ class SolutionValidator {
       }
       if (role == DutyRole.senior && doctor.group != DutyGroup.senior) {
         substitutions++;
-        if (localEvidence == null ||
-            (candidateOnly
-                ? !localEvidence.permitsPhaseBCandidate(problem)
-                : !localEvidence.verifiesLocalTransition(problem, solution))) {
-          errors.add('${doctor.id}: kanıtlanmamış kıdemsiz geçişi yasak.');
-        }
       }
       if (role == DutyRole.junior && doctor.group != DutyGroup.junior) {
         errors.add('${doctor.id}: kıdemsiz pozisyonu için grup uygun değil.');
@@ -163,12 +198,7 @@ class SolutionValidator {
       }
     }
     if (errors.isNotEmpty) {
-      return ValidationResult(
-        errors,
-        null,
-        substitutionCount: substitutions,
-        candidateOnly: candidateOnly,
-      );
+      return CandidateInspection._(errors, null, substitutions);
     }
     final sorted = [...counts]..sort();
     final quality = [
@@ -183,11 +213,6 @@ class SolutionValidator {
         ).any((same) => !same)) {
       errors.add('Bildirilen kalite vektörü hesaplanan değerle eşleşmiyor.');
     }
-    return ValidationResult(
-      errors,
-      quality,
-      substitutionCount: substitutions,
-      candidateOnly: candidateOnly,
-    );
+    return CandidateInspection._(errors, quality, substitutions);
   }
 }

@@ -1,0 +1,1 @@
+{"events": [{"type": "ready", "nodes": 0, "elapsed": 0, "hostMs": 46.900000005960464}, {"type": "started", "nodes": 3, "elapsed": 2000, "hostMs": 50.6000000089407}, {"type": "extended", "nodes": 1794, "elapsed": 151000, "hostMs": 200.5}, {"type": "cancelled", "nodes": 21375, "elapsed": 702000, "hostMs": 750.6000000089407}], "ticks": 150}

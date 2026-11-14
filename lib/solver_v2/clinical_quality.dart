@@ -108,6 +108,28 @@ class ClinicalQualityEvaluator {
     return _calculate(problem, solution, validation);
   }
 
+  /// Preview arithmetic only. Does not discharge transition-proof obligations.
+  /// Normal evaluate()/validate() continue to require genuine local evidence.
+  ClinicalQuality inspectTransferredPreview(
+    Problem problem,
+    Solution solution,
+  ) {
+    final inspection = const SolutionValidator().inspectTransferredCandidate(
+      problem,
+      solution,
+    );
+    return _calculate(
+      problem,
+      solution,
+      ValidationResult(
+        inspection.errors,
+        inspection.prototypeQuality,
+        substitutionCount: inspection.substitutionCount,
+        candidateOnly: true,
+      ),
+    );
+  }
+
   ClinicalQuality _calculate(
     Problem problem,
     Solution solution,

@@ -1,7 +1,12 @@
 import 'dart:async';
 
 import '../solver.dart';
+import '../solution_validator.dart';
+import '../clinical_quality.dart';
 import 'transport.dart';
+import 'web_stub.dart'
+    if (dart.library.js_interop) 'worker_web.dart'
+    as web_backend;
 import 'worker_stub.dart' if (dart.library.io) 'worker_io.dart' as backend;
 
 enum OptimizationState {
@@ -75,10 +80,14 @@ final class OptimizationSnapshot {
     this.best,
     this.error,
     this.forcedTermination = false,
+    this.transportDelay,
   });
   final int runId, sequence, nodes, pruned;
   final OptimizationState state;
   final Duration elapsed;
+
+  /// Same-machine wall-clock delivery delay; excludes host validation time.
+  final Duration? transportDelay;
   final TransitionPhase phase;
   final RestrictedVerdict restrictedVerdict;
   final Duration? firstFeasible;
@@ -103,7 +112,22 @@ final class OptimizationSnapshot {
 
 /// One private worker channel per run. No UI, Firebase, or solver-default changes.
 final class OptimizationController {
-  OptimizationController();
+  OptimizationController() : _spawn = backend.createWorker;
+
+  /// Explicit opt-in; URL is trusted application code, never user-provided input.
+  OptimizationController.web({
+    required Uri workerUri,
+    Duration startupTimeout = const Duration(seconds: 10),
+    Duration heartbeatInterval = const Duration(seconds: 1),
+    Duration responseTimeout = const Duration(seconds: 5),
+  }) : _spawn = (() => web_backend.createWebWorker(
+         workerUri,
+         startupTimeout,
+         heartbeatInterval,
+         responseTimeout,
+       ));
+  final Future<WorkerConnection> Function() _spawn;
+  static bool get webSupported => web_backend.webWorkerSupported;
   static bool get supported => backend.workerSupported;
   static String get platform => backend.workerPlatform;
   final _events = StreamController<OptimizationSnapshot>.broadcast();
@@ -147,7 +171,7 @@ final class OptimizationController {
       _problem = snapshot;
       final input = snapshot.toMessage();
       final settings = options.toMessage();
-      final pending = backend.createWorker();
+      final pending = _spawn();
       _pendingSpawns.add(pending);
       late final WorkerConnection worker;
       try {
@@ -236,6 +260,13 @@ final class OptimizationController {
       };
   void _accept(int id, Map<String, Object?> event) {
     if (_terminal || event['runId'] != id) return;
+    final sentAt = event['sentAtMicros'] as int?;
+    final delay = sentAt == null
+        ? null
+        : Duration(
+            microseconds: (DateTime.now().microsecondsSinceEpoch - sentAt)
+                .clamp(0, 1 << 52),
+          );
     final seq = event['sequence'] as int;
     if (seq <= _workerSequence) return;
     _workerSequence = seq;
@@ -255,6 +286,23 @@ final class OptimizationController {
       if (incoming.clinicalQuality == null) {
         throw StateError('Missing clinical quality');
       }
+      // Independent main-layer check, not trust in the worker's 'valid' boolean.
+      final inspection = const SolutionValidator().inspectTransferredCandidate(
+        _problem!,
+        incoming,
+      );
+      if (!inspection.structuralConstraintsSatisfied) {
+        throw StateError('Invalid transferred incumbent: ${inspection.errors}');
+      }
+      final expected = const ClinicalQualityEvaluator()
+          .inspectTransferredPreview(_problem!, incoming);
+      if (expected.compareTo(incoming.clinicalQuality!) != 0) {
+        throw StateError('Transferred clinical quality mismatch');
+      }
+      // B's proof remains in the worker's genuine session. The private trusted
+      // application worker channel supplies a preview observation, NOT a portable
+      // certificate. Local validate() still rejects B without local evidence.
+
       if (incoming.clinicalQuality!.components.first.toString() != '0' &&
           (event['verdict'] != 'provenInfeasible' ||
               event['phase'] != 'substitution')) {
@@ -280,6 +328,7 @@ final class OptimizationController {
       sequence: _value.sequence + 1,
       state: state,
       elapsed: Duration(microseconds: event['elapsed'] as int),
+      transportDelay: delay,
       nodes: event['nodes'] as int,
       pruned: event['pruned'] as int,
       phase: TransitionPhase.values.byName(event['phase'] as String),
@@ -346,6 +395,7 @@ final class OptimizationController {
       sequence: value.sequence + 1,
       state: state,
       elapsed: value.elapsed,
+      transportDelay: value.transportDelay,
       nodes: value.nodes,
       pruned: value.pruned,
       phase: value.phase,
