@@ -5,9 +5,21 @@ import '../../solver_v2/solver.dart';
 import '../../solver_v2/clinical_quality.dart';
 import '../../solver_v2/runtime/lifecycle.dart';
 import 'workspace.dart';
+import 'data/draft_repository.dart';
+import 'data/draft_session.dart';
+import 'persistence_panel.dart';
 
 class V2SchedulePage extends StatefulWidget {
-  const V2SchedulePage({super.key, this.workspace});
+  const V2SchedulePage({
+    super.key,
+    this.workspace,
+    this.repository,
+    this.persistenceSession,
+    this.logout,
+  });
+  final DraftRepository? repository;
+  final DraftSession? persistenceSession;
+  final Widget? logout;
   final ScheduleWorkspace? workspace;
   @override
   State<V2SchedulePage> createState() => _V2SchedulePageState();
@@ -15,6 +27,9 @@ class V2SchedulePage extends StatefulWidget {
 
 class _V2SchedulePageState extends State<V2SchedulePage> {
   late final ScheduleWorkspace w = widget.workspace ?? ScheduleWorkspace();
+  late final DraftSession? persistence =
+      widget.persistenceSession ??
+      (widget.repository == null ? null : DraftSession(w, widget.repository!));
   int tab = 0;
   int nextId = 0;
   final weekdays = const [
@@ -30,6 +45,7 @@ class _V2SchedulePageState extends State<V2SchedulePage> {
   void initState() {
     super.initState();
     w.addListener(refresh);
+    persistence?.addListener(refresh);
   }
 
   void refresh() {
@@ -39,6 +55,8 @@ class _V2SchedulePageState extends State<V2SchedulePage> {
   @override
   void dispose() {
     w.removeListener(refresh);
+    persistence?.removeListener(refresh);
+    if (widget.persistenceSession == null) persistence?.dispose();
     if (widget.workspace == null) w.dispose();
     super.dispose();
   }
@@ -102,101 +120,133 @@ class _V2SchedulePageState extends State<V2SchedulePage> {
   );
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('AKYS V2 • Nöbet Çizelgesi')),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Wrap(
-                spacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  OutlinedButton.icon(
-                    key: const Key('month'),
-                    onPressed: w.pending ? null : chooseMonth,
-                    icon: const Icon(Icons.calendar_month),
-                    label: Text(
-                      '${w.problem.startDate!.month} / ${w.problem.startDate!.year}',
-                    ),
-                  ),
-                  IconButton.filled(
-                    key: const Key('start'),
-                    tooltip: 'Nöbet oluştur',
-                    onPressed: w.pending
-                        ? null
-                        : () {
-                            setState(() => tab = 2);
-                            w.start();
-                          },
-                    icon: const Icon(Icons.auto_awesome),
-                  ),
-                  IconButton.outlined(
-                    key: const Key('reoptimize'),
-                    tooltip: 'Kilitlerle yeniden optimize et',
-                    onPressed: w.pending
-                        ? null
-                        : () {
-                            setState(() => tab = 2);
-                            w.start(reoptimize: true);
-                          },
-                    icon: const Icon(Icons.lock_reset),
-                  ),
-                  IconButton(
-                    tooltip: 'Yerel çalışma alanı hakkında',
-                    onPressed: () => showDialog<void>(
-                      context: context,
-                      builder: (c) => AlertDialog(
-                        title: const Text('Yerel çalışma alanı'),
-                        content: const Text(
-                          'Kalıcı kayıt ve yayın yoktur. Uygulama kapanırsa taslak kaybolabilir. Web üzerinde Worker, Android üzerinde isolate kullanılır.',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(c),
-                            child: const Text('Kapat'),
-                          ),
-                        ],
-                      ),
-                    ),
-                    icon: const Icon(Icons.info_outline),
-                  ),
-                ],
-              ),
+    return PopScope(
+      canPop: persistence == null || !persistence!.dirty,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final leave = await showDialog<bool>(
+          context: context,
+          builder: (c) => AlertDialog(
+            title: const Text('Kaydedilmemiş değişiklikler'),
+            content: const Text(
+              'Çıkmadan önce kaydedin veya bu ekranda çalışmaya devam edin.',
             ),
-            if (w.error != null)
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Devam et'),
+              ),
+            ],
+          ),
+        );
+        if (leave == true && context.mounted) Navigator.pop(context);
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('AKYS V2 • Nöbet Çizelgesi'),
+          actions: [if (widget.logout != null) widget.logout!],
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
               Padding(
                 padding: const EdgeInsets.all(8),
-                child: Text(
-                  w.error!,
-                  style: const TextStyle(color: AkysTokens.error),
+                child: Wrap(
+                  spacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const Key('month'),
+                      onPressed: w.pending || (persistence?.saving ?? false)
+                          ? null
+                          : chooseMonth,
+                      icon: const Icon(Icons.calendar_month),
+                      label: Text(
+                        '${w.problem.startDate!.month} / ${w.problem.startDate!.year}',
+                      ),
+                    ),
+                    IconButton.filled(
+                      key: const Key('start'),
+                      tooltip: 'Nöbet oluştur',
+                      onPressed: w.pending
+                          ? null
+                          : () {
+                              setState(() => tab = 2);
+                              w.start();
+                            },
+                      icon: const Icon(Icons.auto_awesome),
+                    ),
+                    IconButton.outlined(
+                      key: const Key('reoptimize'),
+                      tooltip: 'Kilitlerle yeniden optimize et',
+                      onPressed: w.pending
+                          ? null
+                          : () {
+                              setState(() => tab = 2);
+                              w.start(reoptimize: true);
+                            },
+                      icon: const Icon(Icons.lock_reset),
+                    ),
+                    IconButton(
+                      tooltip: 'Yerel çalışma alanı hakkında',
+                      onPressed: () => showDialog<void>(
+                        context: context,
+                        builder: (c) => AlertDialog(
+                          title: const Text('Yerel çalışma alanı'),
+                          content: Text(
+                            persistence == null
+                                ? 'Kalıcı kayıt ve yayın yoktur. Uygulama kapanırsa taslak kaybolabilir.'
+                                : 'Kaydedilen sürümler Firebase Emulator üzerinde saklanır. Kaydedilmemiş değişiklikler kapanışta kaybolabilir. Kalıcı onay ve production bağlantısı kapalıdır.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(c),
+                              child: const Text('Kapat'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      icon: const Icon(Icons.info_outline),
+                    ),
+                  ],
                 ),
               ),
-            Expanded(
-              child: switch (tab) {
-                0 => schedule(),
-                1 => doctors(),
-                _ => quality(),
-              },
+              if (w.error != null)
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Text(
+                    w.error!,
+                    style: const TextStyle(color: AkysTokens.error),
+                  ),
+                ),
+              Expanded(
+                child: AbsorbPointer(
+                  absorbing: persistence?.saving ?? false,
+                  child: switch (tab) {
+                    0 => schedule(),
+                    1 => doctors(),
+                    _ => quality(),
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: tab,
+          onDestinationSelected: (i) => setState(() => tab = i),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.calendar_view_month),
+              label: 'Çizelge',
+            ),
+            NavigationDestination(icon: Icon(Icons.people), label: 'Hekimler'),
+            NavigationDestination(
+              icon: Icon(Icons.insights),
+              label: 'Kalite / Arama',
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: tab,
-        onDestinationSelected: (i) => setState(() => tab = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.calendar_view_month),
-            label: 'Çizelge',
-          ),
-          NavigationDestination(icon: Icon(Icons.people), label: 'Hekimler'),
-          NavigationDestination(
-            icon: Icon(Icons.insights),
-            label: 'Kalite / Arama',
-          ),
-        ],
       ),
     );
   }
@@ -240,6 +290,11 @@ class _V2SchedulePageState extends State<V2SchedulePage> {
       key: PageStorageKey('v2-tab-$tab'),
       padding: const EdgeInsets.all(16),
       children: [
+        if (persistence != null) PersistencePanel(session: persistence!),
+        if (w.loadedPreview != null)
+          const Text(
+            'Kaydedilmiş geçişli veya geçersiz önizleme: düzenleme ve kalıcı onay kapalı. Yeniden optimizasyon yeni A/B değerlendirmesi gerektirir.',
+          ),
         Wrap(
           spacing: 8,
           children: [
@@ -385,11 +440,13 @@ class _V2SchedulePageState extends State<V2SchedulePage> {
   Widget slot(int s) {
     final state = w.editor.current;
     final d = state.assignments[s];
-    final locked = state.locks.containsKey(s);
+    final locked = w.currentLocks.containsKey(s);
     final required = w.problem.slotRequirements[s] == SlotRequirement.required;
     final child = OutlinedButton(
       key: Key('slot-$s'),
-      onPressed: w.pending ? null : () => editSlot(s),
+      onPressed: w.pending || w.loadedPreview != null
+          ? null
+          : () => editSlot(s),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Column(
@@ -413,12 +470,14 @@ class _V2SchedulePageState extends State<V2SchedulePage> {
       ),
     );
     return DragTarget<int>(
-      onWillAcceptWithDetails: (x) => !w.pending && x.data != s,
+      onWillAcceptWithDetails: (x) =>
+          !w.pending && w.loadedPreview == null && x.data != s,
       onAcceptWithDetails: (x) =>
           w.edit((e) => d < 0 ? e.move(x.data, s) : e.swap(x.data, s)),
       builder: (c, a, r) => LongPressDraggable<int>(
         data: s,
-        maxSimultaneousDrags: w.pending || locked || d < 0 ? 0 : 1,
+        maxSimultaneousDrags:
+            w.pending || w.loadedPreview != null || locked || d < 0 ? 0 : 1,
         feedback: Material(
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -1055,7 +1114,7 @@ class _V2SchedulePageState extends State<V2SchedulePage> {
     final s = w.progress;
     final best = w.pending ? s.best : null;
     final assignments = best?.assignments ?? w.editor.current.assignments;
-    final current = w.editor.current.quality;
+    final current = w.loadedPreview?.quality ?? w.editor.current.quality;
     final filled = assignments.where((d) => d >= 0).length;
     final optional = [
       for (var i = 0; i < assignments.length; i++)
@@ -1065,6 +1124,7 @@ class _V2SchedulePageState extends State<V2SchedulePage> {
       key: PageStorageKey('v2-tab-$tab'),
       padding: const EdgeInsets.all(16),
       children: [
+        if (persistence != null) PersistencePanel(session: persistence!),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -1076,12 +1136,14 @@ class _V2SchedulePageState extends State<V2SchedulePage> {
                   key: const Key('status'),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-                Text(
-                  '${s.elapsed.inMilliseconds} ms • ${s.nodes} düğüm • ${s.pruned} budama • A/B: ${phaseLabel(s.phase)}',
-                ),
-                Text(
-                  'İlk çözüm: ${s.firstFeasible?.inMilliseconds.toString() ?? "—"} ms',
-                ),
+                if (w.pending)
+                  Text(
+                    '${s.elapsed.inMilliseconds} ms • ${s.nodes} düğüm • ${s.pruned} budama • A/B: ${phaseLabel(s.phase)}',
+                  ),
+                if (w.pending)
+                  Text(
+                    'İlk çözüm: ${s.firstFeasible?.inMilliseconds.toString() ?? "—"} ms',
+                  ),
                 if (w.pending)
                   Wrap(
                     spacing: 8,

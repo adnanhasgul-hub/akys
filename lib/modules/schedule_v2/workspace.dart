@@ -6,6 +6,7 @@ import '../../solver_v2/solver.dart';
 import '../../solver_v2/editing/schedule_editor.dart';
 import '../../solver_v2/editing/reoptimization.dart';
 import '../../solver_v2/runtime/lifecycle.dart';
+import 'data/draft_snapshot.dart';
 
 /// In-memory application workspace. Never persists a proof or contacts Firebase.
 class ScheduleWorkspace extends ChangeNotifier {
@@ -31,6 +32,42 @@ class ScheduleWorkspace extends ChangeNotifier {
   ReoptimizationRequest? request;
   bool closed = false;
   String? error;
+  DraftSnapshot? loadedPreview;
+  Map<int, int> get currentLocks =>
+      loadedPreview?.locks ?? editor.current.locks;
+  DraftSnapshot capture({bool preview = false}) => DraftSnapshot(
+    problem,
+    {for (final d in problem.doctors) d.id: names[d.id] ?? d.id},
+    preview ? progress.best!.assignments : editor.current.assignments,
+    currentLocks,
+  );
+  void restore(DraftSnapshot snapshot) {
+    if (pending) throw StateError('Önce arama sonucunu kapatın.');
+    final replacement = ScheduleEditor(
+      snapshot.problem,
+      assignments: snapshot.assignments,
+    );
+    final readOnly =
+        snapshot.hasTransition ||
+        replacement.current.validity == DraftValidity.invalid;
+    if (!readOnly) {
+      for (final e in snapshot.locks.entries) {
+        if (!replacement.lock(e.key).accepted) {
+          throw StateError('Kilit geri yüklenemedi.');
+        }
+      }
+    }
+    problem = snapshot.problem;
+    editor = replacement;
+    loadedPreview = readOnly ? snapshot : null;
+    names
+      ..clear()
+      ..addAll(snapshot.names);
+    lastEdit = null;
+    error = snapshot.warnings.isEmpty ? null : snapshot.warnings.join('\n');
+    notifyListeners();
+  }
+
   EditResult? lastEdit;
   final Map<String, String> names = {};
   OptimizationSnapshot get progress => runtime.value;
@@ -80,6 +117,7 @@ class ScheduleWorkspace extends ChangeNotifier {
     }
     final nextEditor = ScheduleEditor(next);
     lastEdit = null;
+    loadedPreview = null;
     problem = next;
     editor = nextEditor;
     error = null;
@@ -87,7 +125,7 @@ class ScheduleWorkspace extends ChangeNotifier {
   }
 
   void edit(EditResult Function(ScheduleEditor) operation) {
-    if (pending) return;
+    if (pending || loadedPreview != null) return;
     final result = operation(editor);
     if (result.accepted) lastEdit = result;
     error = result.accepted
@@ -102,7 +140,13 @@ class ScheduleWorkspace extends ChangeNotifier {
   }) async {
     if (pending) return;
     try {
-      request = reoptimize || editor.current.locks.isNotEmpty
+      request = loadedPreview != null
+          ? ReoptimizationRequest(
+              problem,
+              reference: loadedPreview!.assignments,
+              locks: loadedPreview!.locks,
+            )
+          : reoptimize || currentLocks.isNotEmpty
           ? ReoptimizationRequest.fromEditor(editor)
           : null;
       searchProblem = request?.problem ?? problem;
@@ -138,7 +182,7 @@ class ScheduleWorkspace extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    for (final lock in editor.current.locks.entries) {
+    for (final lock in currentLocks.entries) {
       if (best.assignments[lock.key] != lock.value) {
         error = 'Kilit korunmadı.';
         notifyListeners();
@@ -148,6 +192,7 @@ class ScheduleWorkspace extends ChangeNotifier {
     }
     await runtime.cancel();
     lastEdit = null;
+    loadedPreview = null;
     editor = replacement;
     searchProblem = null;
     request = null;

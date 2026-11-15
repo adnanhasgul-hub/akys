@@ -1,0 +1,59 @@
+{
+  "baseCommit": "2e44edb78ef408eca6e968ab466d913199d15505",
+  "branch": "feature/akys-v2-solver-core",
+  "environment": {
+    "os": "Linux-6.18.57-x86_64-with-glibc2.41",
+    "flutter": "3.47.9",
+    "dart": "3.13.7",
+    "chromium": "154.0.8037.57",
+    "firebaseProject": "demo-akys",
+    "physicalAndroidDevices": 0
+  },
+  "flutterAnalyze": "PASS",
+  "dartAnalyze": "PASS",
+  "flutterTests": {
+    "passed": 501,
+    "failed": 0,
+    "command": "flutter test --no-pub"
+  },
+  "newPersistenceTests": {
+    "passed": 21,
+    "failed": 0
+  },
+  "chromiumRegression": {
+    "passed": 57,
+    "failed": 0
+  },
+  "realWorker": {
+    "passed": 18,
+    "failed": 0,
+    "artifact": "stage_1_9c_worker.json"
+  },
+  "firestoreRules": {
+    "v2Checks": 45,
+    "v2Passed": true,
+    "v1RegressionPassed": true,
+    "project": "demo-akys",
+    "productionAccess": false
+  },
+  "builds": {
+    "webRelease": "PASS",
+    "androidDebugApk": "PASS",
+    "workerCompilation": "PASS",
+    "entry": "lib/main_v2_firebase.dart"
+  },
+  "limitations": [
+    "No permanent approval: trusted server clinical validator is absent.",
+    "No production persistence or rule deployment tested.",
+    "No physical Android interaction test.",
+    "Account switching after offline/reconnect/logout required page reload in Chromium.",
+    "No browser tab-close recovery guarantee.",
+    "Last 100 drafts/versions only; no pagination.",
+    "Audit attempts are client-reported; no comprehensive trusted server audit."
+  ],
+  "artifacts": {
+    "build/v2-firebase/main.dart.js": "8bf15056c37cab8ff86d4447eb58eb54794df12527e62e6f8d106388be1496be",
+    "build/v2-firebase/akys_v2_worker.js": "19019a84346a55dbd9446c9e5807f77d78038ea4a4590cd0a2fa70cef85459e7",
+    "build/app/outputs/flutter-apk/app-debug.apk": "7628b32c0ff15c125adf7f3acdd7660950f9a769baf41dea879f57d984ae1b55"
+  }
+}
