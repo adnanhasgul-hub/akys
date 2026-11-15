@@ -1,0 +1,12 @@
+{
+  "errors": [],
+  "workers": [
+    "http://127.0.0.1:36005/akys_v2_worker.js"
+  ],
+  "externalRequests": [],
+  "chromium": "154.0.8037.57",
+  "pass": true,
+  "scenario": "actual empty release -> doctor added -> monthly required capacity infeasible -> real Worker proof shown",
+  "appSha256": "862a42668c233acbd48b951b4abd179b6d351ccc0554d1e865d64ea658701310",
+  "workerSha256": "19019a84346a55dbd9446c9e5807f77d78038ea4a4590cd0a2fa70cef85459e7"
+}

@@ -1,0 +1,31 @@
+{
+  "dateUtc": "2026-11-15T06:22:45.627030+00:00",
+  "baseCommit": "423bca9b7069582c023d7b491f0e64df534dbfc8",
+  "branch": "feature/akys-v2-solver-core",
+  "flutter": "3.47.9",
+  "dart": "3.13.7",
+  "fullFlutterTestsPassed": 480,
+  "newTestsPassed": 19,
+  "chromiumTestsPassed": 36,
+  "realWorkerTestsPassed": 18,
+  "flutterAnalyze": "PASS",
+  "targetedDartAnalyze": "PASS",
+  "webRelease": "PASS",
+  "androidDebug": "PASS",
+  "androidDeviceAvailable": false,
+  "deploymentPerformed": false,
+  "sourceSha256": {
+    "lib/modules/schedule_v2/v2_app.dart": "29e8166fbe68dd01de37c045d675ea3425cfe6d0b154a3af236f6c002d131117",
+    "lib/modules/schedule_v2/workspace.dart": "ab2afe2cf3d082e550e6aff7a51287f0f74a213502b8107bee7214fa98e82a22",
+    "lib/modules/schedule_v2/schedule_page.dart": "6bc3df3069851b6f32ea4d0126dda37bbd8e527a0796d981ab870ca7906d0e4b",
+    "lib/main_v2.dart": "73286fbf5ae3ee2a5aca18ca55c49de86a49b86b7fb496d4d81a62a214d2c087",
+    "test/modules/schedule_v2/interactions_test.dart": "85951070ea3c23168b3c3454d6fc5ba5ee005d3f33a908b5b8e68c83488783d2",
+    "test/modules/schedule_v2/page_test.dart": "871cb711d8bea5f3531bf9167bf6976b83ac7ff7f8b7fe0d53980fe8194f7449",
+    "test/modules/schedule_v2/workspace_test.dart": "9a1cbb7e55a237a88f2fbb868cf47076c58a74bb837d1a0cd595892c75a94644"
+  },
+  "artifactsSha256": {
+    "build/web/main.dart.js": "862a42668c233acbd48b951b4abd179b6d351ccc0554d1e865d64ea658701310",
+    "build/web/akys_v2_worker.js": "19019a84346a55dbd9446c9e5807f77d78038ea4a4590cd0a2fa70cef85459e7",
+    "build/app/outputs/flutter-apk/app-debug.apk": "259239bd38b5f80abd522906626ad750e9a0f80b7ed86a02cdb2b368ab7bdd56"
+  }
+}
