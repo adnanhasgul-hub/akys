@@ -1,7 +1,7 @@
 const fs=require('node:fs');
 const assert=require('node:assert/strict');
 const {initializeTestEnvironment,assertSucceeds,assertFails}=require('@firebase/rules-unit-testing');
-const {doc,getDoc,getDocs,collection,writeBatch,serverTimestamp,updateDoc,deleteDoc,runTransaction}=require('firebase/firestore');
+const {doc,getDoc,getDocs,collection,writeBatch,serverTimestamp,updateDoc,deleteDoc,runTransaction,query,orderBy,documentId,limit,startAfter}=require('firebase/firestore');
 (async()=>{
  if(!process.env.FIRESTORE_EMULATOR_HOST)throw Error('Emulator required');
  const env=await initializeTestEnvironment({projectId:'demo-akys',firestore:{rules:fs.readFileSync('firestore.rules','utf8')}});
@@ -52,6 +52,13 @@ const {doc,getDoc,getDocs,collection,writeBatch,serverTimestamp,updateDoc,delete
   // An admin cannot overwrite a seeded, server-owned approved head either.
   await env.withSecurityRulesDisabled(async c=>{const b=writeBatch(c.firestore());b.set(doc(c.firestore(),'v2_schedules/approved'),{...h,status:'approved'});await b.commit();});
   await no(save(admin,'approved',data(2,'draft',{createdAt:h.createdAt})));
+  // Production-shaped pagination queries execute against the real emulator.
+  const sorted=query(collection(admin,'v2_schedules'),orderBy('at','desc'),orderBy(documentId(),'desc'));
+  const all=(await getDocs(sorted)).docs.map(d=>d.id),paged=[];let cursor;
+  do {const snap=await getDocs(cursor?query(sorted,startAfter(cursor),limit(2)):query(sorted,limit(2)));if(snap.empty)break;paged.push(...snap.docs.map(d=>d.id));cursor=snap.docs.at(-1);}while(true);
+  assert.deepEqual(paged,all);checks++;
+  const versions=await getDocs(query(collection(admin,'v2_schedules/a/versions'),orderBy('version','desc'),orderBy(documentId(),'desc'),limit(2)));
+  assert.deepEqual(versions.docs.map(d=>d.data().version),[3,2]);checks++;
   console.log(JSON.stringify({v2RulesChecks:checks,pass:true}));
  } finally{await env.cleanup();}
 })().catch(e=>{console.error(e);process.exitCode=1});

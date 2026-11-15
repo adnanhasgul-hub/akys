@@ -6,6 +6,7 @@ abstract class AuthService extends ChangeNotifier {
   AuthState get state;
   Future<void> signIn(String email, String password);
   Future<void> signOut();
+  Future<void> refreshAuthorization() async {}
 }
 
 class AuthFailure implements Exception {

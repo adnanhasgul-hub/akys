@@ -1,0 +1,15 @@
+{
+  "checks": [
+    "existing Auth UI admin claim, incomplete draft + doctor + lock saved atomically",
+    "page reload, server list/open, doctor and lock restored",
+    "real offline transaction failure preserves draft; online same-operation retry succeeds",
+    "revision and append-only version history; approval remains disabled and rejection logged",
+    "same-document logout and different non-admin login: no reload; private UI blocked",
+    "admin claim grant refresh opens fresh workspace without prior-user draft",
+    "admin claim revoke refresh closes private workspace"
+  ],
+  "errors": [],
+  "externalFirebaseRequests": [],
+  "chromium": "154.0.8037.57",
+  "pass": true
+}

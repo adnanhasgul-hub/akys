@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
@@ -11,8 +13,9 @@ import 'persistence_test.dart' as fixtures;
 
 class Auth extends AuthService {
   AuthStatus status = AuthStatus.authorized;
+  String? uid;
   @override
-  AuthState get state => AuthState(status);
+  AuthState get state => AuthState(status, userId: uid);
   void emit(AuthStatus next) {
     status = next;
     notifyListeners();
@@ -25,7 +28,90 @@ class Auth extends AuthService {
   Future<void> signOut() async => emit(AuthStatus.signedOut);
 }
 
+class DelayedRepository extends FirestoreDraftRepository {
+  DelayedRepository(super.db, super.authorization);
+  final gate = Completer<void>();
+  @override
+  Future<DraftRecord> save(SaveDraft request) async {
+    await gate.future;
+    return super.save(request);
+  }
+}
+
 void main() {
+  testWidgets(
+    'pending save acknowledgement cannot enter the next user session',
+    (t) async {
+      final auth = Auth()..uid = 'first';
+      addTearDown(auth.dispose);
+      final repo = DelayedRepository(
+        FakeFirebaseFirestore(),
+        fixtures.Authorization(),
+      );
+      await t.pumpWidget(V2App(auth: auth, repository: repo));
+      await t.pumpAndSettle();
+      final page = t.widget<V2SchedulePage>(find.byType(V2SchedulePage));
+      page.workspace!.restore(fixtures.fixture());
+      final oldSession = page.persistenceSession!;
+      final pending = oldSession.save();
+      await t.pump();
+      expect(oldSession.saving, true);
+      auth.uid = 'second';
+      auth.emit(AuthStatus.authorized);
+      await t.pumpAndSettle();
+      final next = t
+          .widget<V2SchedulePage>(find.byType(V2SchedulePage))
+          .persistenceSession!;
+      expect(oldSession.closed, true);
+      repo.gate.complete();
+      await pending;
+      await t.pumpAndSettle();
+      expect(next.record, isNull);
+      expect(next.workspace.names, isEmpty);
+      expect(find.textContaining('Uzun İsimli Hekim'), findsNothing);
+    },
+  );
+  testWidgets(
+    'direct authorized UID switch disposes old editor and worker owner',
+    (t) async {
+      final auth = Auth()..uid = 'first';
+      addTearDown(auth.dispose);
+      final repo = FirestoreDraftRepository(
+        FakeFirebaseFirestore(),
+        fixtures.Authorization(),
+      );
+      await t.pumpWidget(V2App(auth: auth, repository: repo));
+      await t.pumpAndSettle();
+      final old = t
+          .widget<V2SchedulePage>(find.byType(V2SchedulePage))
+          .workspace!;
+      old.restore(fixtures.fixture());
+      await t.pumpAndSettle();
+      expect(find.textContaining('Uzun İsimli Hekim'), findsWidgets);
+      unawaited(
+        showDialog<void>(
+          context: t.element(find.byType(V2SchedulePage)),
+          builder: (_) => const AlertDialog(
+            content: Text('Önceki kullanıcı özel diyalogu'),
+          ),
+        ),
+      );
+      await t.pumpAndSettle();
+      expect(find.text('Önceki kullanıcı özel diyalogu'), findsOneWidget);
+      auth.uid = 'second';
+      auth.emit(AuthStatus.authorized);
+      await t.pumpAndSettle();
+      final next = t
+          .widget<V2SchedulePage>(find.byType(V2SchedulePage))
+          .workspace!;
+      expect(old.closed, true);
+      expect(next, isNot(same(old)));
+      expect(next.names, isEmpty);
+      expect(next.currentLocks, isEmpty);
+      expect(find.textContaining('Uzun İsimli Hekim'), findsNothing);
+      expect(find.text('Önceki kullanıcı özel diyalogu'), findsNothing);
+    },
+  );
   testWidgets(
     'claim refresh hides private UI without losing local draft; signout wipes it',
     (t) async {

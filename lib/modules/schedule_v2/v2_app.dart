@@ -44,6 +44,7 @@ class _AuthorizedWorkspace extends StatefulWidget {
 class _AuthorizedWorkspaceState extends State<_AuthorizedWorkspace> {
   ScheduleWorkspace? workspace;
   DraftSession? session;
+  String? ownerId;
   @override
   void initState() {
     super.initState();
@@ -53,6 +54,14 @@ class _AuthorizedWorkspaceState extends State<_AuthorizedWorkspace> {
 
   void resolve() {
     final status = widget.auth.state.status;
+    final uid = widget.auth.state.userId;
+    if (workspace != null && ownerId != uid) {
+      session?.dispose();
+      workspace?.dispose();
+      session = null;
+      workspace = null;
+    }
+    ownerId = uid;
     if (status == AuthStatus.authorized && workspace == null) {
       workspace = ScheduleWorkspace();
       session = DraftSession(workspace!, widget.repository);
@@ -66,7 +75,13 @@ class _AuthorizedWorkspaceState extends State<_AuthorizedWorkspace> {
   }
 
   void changed() {
-    if (mounted) setState(resolve);
+    if (!mounted) return;
+    final state = widget.auth.state;
+    if (ownerId != state.userId ||
+        [AuthStatus.signedOut, AuthStatus.denied].contains(state.status)) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+    setState(resolve);
   }
 
   @override
@@ -78,13 +93,16 @@ class _AuthorizedWorkspaceState extends State<_AuthorizedWorkspace> {
   }
 
   Future<void> logout() async {
-    if (session?.saving == true) return;
-    if (session?.dirty == true) {
+    if (session?.saving == true || session?.dirty == true) {
       final yes = await showDialog<bool>(
         context: context,
         builder: (c) => AlertDialog(
           title: const Text('Kaydedilmemiş değişiklikler'),
-          content: const Text('Kaydetmeden çıkış yapılsın mı?'),
+          content: Text(
+            session?.saving == true
+                ? 'Kayıt isteği sürüyor. Çıkış yapılsın mı? Sunucunun önceden kabul ettiği kayıt geri alınmaz; sonucu daha sonra geçmişten kontrol edin.'
+                : 'Kaydetmeden çıkış yapılsın mı?',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(c, false),
@@ -110,19 +128,39 @@ class _AuthorizedWorkspaceState extends State<_AuthorizedWorkspace> {
   }
 
   @override
-  Widget build(BuildContext context) => AuthGate(
-    auth: widget.auth,
-    child: workspace == null
-        ? const SizedBox.shrink()
-        : V2SchedulePage(
-            workspace: workspace,
-            persistenceSession: session,
-            repository: widget.repository,
-            logout: IconButton(
-              tooltip: 'Çıkış yap',
-              onPressed: logout,
-              icon: const Icon(Icons.logout),
-            ),
-          ),
-  );
+  Widget build(BuildContext context) {
+    final authorized = widget.auth.state.status == AuthStatus.authorized;
+    return Stack(
+      children: [
+        Offstage(
+          offstage: !authorized,
+          child: workspace == null
+              ? const SizedBox.shrink()
+              : V2SchedulePage(
+                  key: ObjectKey(workspace),
+                  workspace: workspace,
+                  persistenceSession: session,
+                  repository: widget.repository,
+                  logout: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Yetkiyi yeniden doğrula',
+                        onPressed: widget.auth.refreshAuthorization,
+                        icon: const Icon(Icons.verified_user_outlined),
+                      ),
+                      IconButton(
+                        tooltip: 'Çıkış yap',
+                        onPressed: logout,
+                        icon: const Icon(Icons.logout),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+        if (!authorized)
+          AuthGate(auth: widget.auth, child: const SizedBox.shrink()),
+      ],
+    );
+  }
 }

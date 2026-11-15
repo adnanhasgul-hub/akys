@@ -196,7 +196,7 @@ class _V2SchedulePageState extends State<V2SchedulePage> {
                           content: Text(
                             persistence == null
                                 ? 'Kalıcı kayıt ve yayın yoktur. Uygulama kapanırsa taslak kaybolabilir.'
-                                : 'Kaydedilen sürümler Firebase Emulator üzerinde saklanır. Kaydedilmemiş değişiklikler kapanışta kaybolabilir. Kalıcı onay ve production bağlantısı kapalıdır.',
+                                : 'Kaydedilen sürümler yetkilendirilmiş Firebase bağlantısında saklanır. Kaydedilmemiş değişiklikler kapanışta kaybolabilir. Sunucu klinik doğrulaması tamamlanana kadar kalıcı onay kapalıdır.',
                           ),
                           actions: [
                             TextButton(

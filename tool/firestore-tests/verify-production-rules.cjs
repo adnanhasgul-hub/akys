@@ -29,6 +29,8 @@ async function verify() {
   const base = `https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents`;
   const absentToken = randomBytes(24).toString('hex');
   const probes = [
+    ['anonymous V2 schedule LIST', `${base}/v2_schedules?pageSize=1`],
+    ['anonymous V2 version GET', `${base}/v2_schedules/invalid-id/versions/1`],
     ['anonymous private registry GET', `${base}/work_schedule/main`],
     ['anonymous private personnel LIST', `${base}/work_schedule/main/personnel?pageSize=1`],
     ['anonymous private months LIST', `${base}/work_schedule/main/months?pageSize=1`],

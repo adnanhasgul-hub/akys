@@ -4,9 +4,10 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
 parser=argparse.ArgumentParser()
 parser.add_argument('--directory',default='build/v2-ui-acceptance')
+parser.add_argument('--result',default='tool/solver_v2/results/stage_1_9b_browser.json')
 args=parser.parse_args()
 build=Path(args.directory)
-out=Path('tool/solver_v2/results/stage_1_9b_browser.json')
+out=Path(args.result)
 results={'checks':[], 'errors':[], 'workers':[]}
 with http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(http.server.SimpleHTTPRequestHandler,directory=str(build))) as server:
  threading.Thread(target=server.serve_forever,daemon=True).start()
@@ -62,6 +63,15 @@ with http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(http.serv
    results['mainThread']=page.evaluate('({beats:window.beats,maxGapMilliseconds:Math.max(...window.gaps)})')
    assert results['mainThread']['beats']>10
    results['checks'].append('UI navigation during active worker, deadline extension, cooperative cancel')
+   page.get_by_role('button',name='Sonucu reddet / Taslağa dön').click()
+   page.get_by_role('tab',name='Çizelge').click()
+   scroll=time.perf_counter()
+   page.mouse.move(600,700);page.mouse.wheel(0,2000);page.wait_for_timeout(250)
+   page.mouse.wheel(0,-5000);page.wait_for_timeout(250)
+   results['scrollRoundTripObservedMs']=(time.perf_counter()-scroll)*1000
+   expect(page.get_by_role('button',name='Kıdemli • REQUIRED / Zorunlu',exact=False).first).to_be_visible()
+   results['checks'].append('30-day table scroll down/up remains interactive; measurement includes 500ms deliberate waits')
+
    assert results['workers'] and not results['errors'], results
    results['appSha256']=hashlib.sha256((build/'main.dart.js').read_bytes()).hexdigest()
    results['workerSha256']=hashlib.sha256((build/'akys_v2_worker.js').read_bytes()).hexdigest()

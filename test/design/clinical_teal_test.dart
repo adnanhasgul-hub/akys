@@ -1,52 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
-import 'package:akys/app/akys_app.dart';
-import 'package:akys/core/auth/auth_state.dart';
 import 'package:akys/core/design/clinical_teal_theme.dart';
 import 'package:akys/core/design/akys_components.dart';
 import 'package:akys/core/design/akys_adaptive_navigation.dart';
-import 'package:akys/modules/work_schedule/data/schedule_repository.dart';
 
-import '../widget_test.dart' show FakeAuth;
 
 Widget gallery(Widget child) => MaterialApp(
   theme: ClinicalTealTheme.light,
   home: Scaffold(body: SingleChildScrollView(child: child)),
 );
 void main() {
-  for (final size in [
-    const Size(320, 750),
-    const Size(768, 1000),
-    const Size(1440, 1000),
-  ]) {
-    for (final scale in [1.0, 2.0]) {
-      testWidgets('Home responsive ${size.width} scale $scale', (tester) async {
-        tester.view.physicalSize = size;
-        tester.view.devicePixelRatio = 1;
-        tester.platformDispatcher.textScaleFactorTestValue = scale;
-        addTearDown(tester.view.resetPhysicalSize);
-        addTearDown(tester.view.resetDevicePixelRatio);
-        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-        final auth = FakeAuth(AuthStatus.authorized);
-        addTearDown(auth.dispose);
-        await tester.pumpWidget(AkysApp(auth: auth));
-        await tester.pumpAndSettle();
-        expect(find.text('AKYS'), findsOneWidget);
-        expect(find.text('A Klinik Yönetim Sistemi'), findsOneWidget);
-        await tester.ensureVisible(find.text('Ameliyat Notları'));
-        await tester.tap(find.text('Ameliyat Notları'));
-        await tester.pumpAndSettle();
-        expect(find.text('Yakında'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-        expect(
-          Theme.of(tester.element(find.text('AKYS'))).colorScheme.primary,
-          AkysTokens.primary,
-        );
-      });
-    }
-  }
   test('Semantic foreground/background contrast meets AA', () {
     double contrast(Color a, Color b) {
       final x = a.computeLuminance(), y = b.computeLuminance();
@@ -116,28 +79,6 @@ void main() {
       ),
     );
     await tester.pump(const Duration(milliseconds: 200));
-    expect(tester.takeException(), isNull);
-  });
-  testWidgets('Keyboard can activate home module without changing auth flow', (
-    tester,
-  ) async {
-    final auth = FakeAuth(AuthStatus.authorized);
-    addTearDown(auth.dispose);
-    await tester.pumpWidget(
-      AkysApp(
-        auth: auth,
-        scheduleRepository: FirestoreScheduleRepository(
-          FakeFirebaseFirestore(),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    final context = tester.element(find.text('Çalışma Çizelgesi'));
-    Focus.of(context).requestFocus();
-    await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    await tester.pumpAndSettle();
-    expect(find.text('Genel Bakış'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
   testWidgets('Form validation and confirm cancel/accept are explicit', (

@@ -57,12 +57,20 @@ jobs:
         run: flutter test
 
       - name: Build Flutter Web
-        run: flutter build web --release --dart-define=AKYS_V13_SOLVER=true
+        run: flutter build web --release
+
+      - name: Package the Dart V2 Web Worker
+        run: bash tool/solver_v2/web/build_worker.sh build/web
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_AKYS }}
+
+      - name: Require the tested V2 rules before publishing the V2 client
+        env:
+          NODE_PATH: tool/firestore-tests/node_modules
+        run: node tool/firestore-tests/verify-production-rules.cjs
 
       - name: Install Firebase CLI
         run: npm install --global firebase-tools

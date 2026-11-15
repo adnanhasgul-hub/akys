@@ -50,6 +50,32 @@ class DraftRecord {
   final int? sourceVersion;
 }
 
+/// Metadata only: browsing heads never downloads each clinical payload.
+class DraftSummary {
+  DraftSummary(this.id, Map<String, dynamic> data)
+    : version = data['version'] as int,
+      year = data['year'] as int,
+      month = data['month'] as int,
+      status = data['status'] as String,
+      actor = data['actor'] as String,
+      summary = data['summary'] as String,
+      at = (data['at'] as Timestamp?)?.toDate(),
+      sourceId = data['sourceId'] as String?,
+      sourceVersion = data['sourceVersion'] as int?;
+  final String id, status, actor, summary;
+  final int version, year, month;
+  final DateTime? at;
+  final String? sourceId;
+  final int? sourceVersion;
+}
+
+class DraftPage {
+  DraftPage(this.items, this.cursor, this.hasMore);
+  final List<DraftSummary> items;
+  final DocumentSnapshot<Map<String, dynamic>>? cursor;
+  final bool hasMore;
+}
+
 class SaveDraft {
   SaveDraft({
     required this.id,
@@ -80,6 +106,11 @@ abstract class DraftRepository {
   });
   Future<DraftRecord> save(SaveDraft request);
   Future<List<DraftRecord>> list();
+  Future<DraftPage> page({
+    String? scheduleId,
+    DocumentSnapshot<Map<String, dynamic>>? after,
+    int pageSize = 20,
+  });
   Future<DraftRecord> open(String id, {int? version});
   Future<List<DraftRecord>> history(String id);
   Future<void> rejectApproval(String id, int version);
@@ -244,6 +275,40 @@ class FirestoreDraftRepository implements DraftRepository {
             .data();
     if (data == null) throw StateError('Sürüm bulunamadı.');
     return record(id, data);
+  }
+
+  @override
+  Future<DraftPage> page({
+    String? scheduleId,
+    DocumentSnapshot<Map<String, dynamic>>? after,
+    int pageSize = 20,
+  }) async {
+    if (pageSize < 1 || pageSize > 50) throw ArgumentError.value(pageSize);
+    final uid = await authorization.requireAdmin();
+    Query<Map<String, dynamic>> query = scheduleId == null
+        ? root.orderBy('at', descending: true)
+        : root
+              .doc(scheduleId)
+              .collection('versions')
+              .orderBy('version', descending: true);
+    query = query.orderBy(FieldPath.documentId, descending: true);
+    if (after != null) query = query.startAfterDocument(after);
+    final docs =
+        (await query
+                .limit(pageSize + 1)
+                .get(const GetOptions(source: Source.server)))
+            .docs;
+    if (await authorization.requireAdmin() != uid) {
+      throw StateError('Oturum değişti.');
+    }
+    final visible = docs.take(pageSize).toList();
+    return DraftPage(
+      List.unmodifiable(
+        visible.map((d) => DraftSummary(scheduleId ?? d.id, d.data())),
+      ),
+      visible.isEmpty ? null : visible.last,
+      docs.length > pageSize,
+    );
   }
 
   @override
