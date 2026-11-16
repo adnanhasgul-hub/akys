@@ -1,0 +1,58 @@
+{
+  "status": "proposed; validate supported permissions and actual API use before binding",
+  "roles": {
+    "readonly": [
+      "resourcemanager.projects.get",
+      "firebase.projects.get",
+      "serviceusage.services.use",
+      "firebasehosting.sites.get",
+      "firebasehosting.sites.list",
+      "firebasehosting.releases.get",
+      "firebasehosting.releases.list",
+      "firebaserules.releases.get",
+      "firebaserules.rulesets.get",
+      "datastore.databases.get",
+      "datastore.indexes.get",
+      "datastore.indexes.list"
+    ],
+    "hosting": [
+      "resourcemanager.projects.get",
+      "firebase.projects.get",
+      "serviceusage.services.use",
+      "firebasehosting.sites.get",
+      "firebasehosting.sites.list",
+      "firebasehosting.versions.create",
+      "firebasehosting.versions.get",
+      "firebasehosting.versions.list",
+      "firebasehosting.versions.update",
+      "firebasehosting.releases.create",
+      "firebasehosting.releases.get",
+      "firebasehosting.releases.list",
+      "firebaserules.releases.get",
+      "firebaserules.rulesets.get"
+    ],
+    "rules": [
+      "resourcemanager.projects.get",
+      "firebase.projects.get",
+      "serviceusage.services.use",
+      "datastore.databases.get",
+      "firebaserules.rulesets.create",
+      "firebaserules.rulesets.get",
+      "firebaserules.rulesets.list",
+      "firebaserules.releases.create",
+      "firebaserules.releases.get",
+      "firebaserules.releases.list",
+      "firebaserules.releases.update",
+      "firebaserules.rulesets.test"
+    ],
+    "indexes": [
+      "resourcemanager.projects.get",
+      "firebase.projects.get",
+      "serviceusage.services.use",
+      "datastore.databases.get",
+      "datastore.indexes.create",
+      "datastore.indexes.get",
+      "datastore.indexes.list"
+    ]
+  }
+}

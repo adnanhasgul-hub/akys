@@ -1,0 +1,25 @@
+{
+  "base": "c77ea8dc0d3b05adcfbaf33fa7d2226d2dd02ea2",
+  "sourceObjects": {
+    "lib/solver_v2/clinical_bounds.dart": "f72c693bb5853ee8874ecb1c0515fb0a7866191e",
+    "lib/solver_v2/clinical_quality.dart": "c8775f68eade741537fc7835dd6d12dd0cf85803",
+    "lib/solver_v2/editing/reoptimization.dart": "4ea960d723f196ff7ecaf1c2109a2d06f2679e12",
+    "lib/solver_v2/editing/schedule_editor.dart": "af9ea6d6964368fa19c73ceb09a2105f9dec0f4c",
+    "lib/solver_v2/runtime/lifecycle.dart": "54270bb780671954a5ef5e2a44ca550b489601ee",
+    "lib/solver_v2/runtime/transport.dart": "a3311320e5c6244b2d69873a550f35db02c0364e",
+    "lib/solver_v2/runtime/web_stub.dart": "f058a78561e0cf9396259bf428410d6bb23a2eb5",
+    "lib/solver_v2/runtime/worker_engine.dart": "c20845a40c165186b338049746407920c4718764",
+    "lib/solver_v2/runtime/worker_io.dart": "d9409bc9b3f87a3793ecbdf79c024c237da2ee60",
+    "lib/solver_v2/runtime/worker_stub.dart": "7b9c14ee4a76124c4d32af6adf978645794abdda",
+    "lib/solver_v2/runtime/worker_web.dart": "dafccafbedb316fc3d182eba20dcf36c0a25094f",
+    "lib/solver_v2/solution_validator.dart": "1d3c330a7d2ffb76b2435f7cc1577aaf861a16eb",
+    "lib/solver_v2/solver.dart": "8bd1bb5f438f209a11a06c8b3354b0c71eed431f",
+    "tool/solver_v2/lifecycle_smoke.dart": "20162e9999115705ee28f934e8b255d832aa4433",
+    "tool/solver_v2/web/acceptance.dart": "d4f0e08105df92746e65288c5e59b66ae4209fba",
+    "tool/solver_v2/web/benchmark_browser.dart": "232eed64e819ad686c85b10e09bfe759d57683ab",
+    "tool/solver_v2/web/benchmark_shared.dart": "abf7bc8ed9fd65a74a2f5e6ad5ac16b8af34db3f",
+    "tool/solver_v2/web/benchmark_vm.dart": "3c1bac4aeaf2436234ea1710bdec9d50232503bf",
+    "tool/solver_v2/web/feasibility_probe.dart": "fb68559833a8bca4a91764bac119439cd36b99a5",
+    "tool/solver_v2/web/worker_entry.dart": "30fc584854dafac4ea5f976daf9ba62fe6f21621"
+  }
+}

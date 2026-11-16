@@ -1,0 +1,24 @@
+{
+  "checks": [
+    "signed non-admin, string admin, expired, wrong audience/issuer/future token rejected",
+    "missing token rejected",
+    "unsigned/fake token rejected",
+    "tampered signed claims rejected",
+    "client proof field rejected",
+    "missing rejected without writes",
+    "transition rejected without writes",
+    "proof rejected without writes",
+    "hard-constraint rejected without writes",
+    "corrupt snapshot rejected",
+    "invalid document path rejected",
+    "unknown schedule rejected",
+    "A approval and idempotent retry",
+    "concurrent transaction: single approval audit",
+    "approved revision has no optimum claim",
+    "two distinct admins: exactly one immutable approval",
+    "modified version metadata and missing snapshot link rejected",
+    "commit precondition failure leaves head/version unapproved",
+    "changed approved snapshot rejected on retry by digest"
+  ],
+  "pass": true
+}

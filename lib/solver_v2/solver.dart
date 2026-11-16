@@ -1,0 +1,1114 @@
+import 'clinical_quality.dart';
+import 'clinical_bounds.dart';
+import 'solution_validator.dart';
+
+/// Standalone, exact enumerator for small synthetic schedules.
+/// Day numbers are consecutive calendar-day indices starting at zero.
+enum DutyGroup { senior, junior }
+
+enum DutyRole { senior, junior }
+
+enum SlotRequirement { required, optional }
+
+/// Legacy mode is opt-in and must not be used as a clinical fallback.
+enum OptimizationMode { clinical, prototypeLegacy }
+
+/// Optional instrumentation; elapsed timings include stopwatch overhead.
+final class SearchProfile {
+  int completedLeaves = 0, validLeaves = 0, invalidLeaves = 0;
+  int qualityCalls = 0, qualityTicks = 0, hardCalls = 0, hardTicks = 0;
+  int firstValidationCalls = 0, firstValidationTicks = 0;
+  int emptyOptionalChoices = 0;
+  final Map<int, int> emptyOptionalByDepth = {};
+  final Map<int, int> postFirstNodesByDepth = {};
+}
+
+/// Sentinel used only for an unfilled optional slot.
+const int unfilledSlot = -1;
+
+enum SeniorityLevel { k1, k2, k3, k4 }
+
+final class Doctor {
+  Doctor({
+    required this.id,
+    this.maxDuties = 8,
+    Set<int> unavailable = const {},
+    Set<int> must = const {},
+    this.group = DutyGroup.senior,
+    this.seniorityRank = 1,
+    this.seniorityLevel,
+    Set<DutyRole> eligibleRoles = const {DutyRole.senior, DutyRole.junior},
+    List<DateTime> previousDuties = const [],
+  }) : unavailable = Set.unmodifiable(unavailable),
+       must = Set.unmodifiable(must),
+       eligibleRoles = Set.unmodifiable(eligibleRoles),
+       previousDuties = List.unmodifiable(previousDuties) {
+    if (id.isEmpty ||
+        maxDuties < 0 ||
+        unavailable.any((d) => d < 0) ||
+        must.any((d) => d < 0) ||
+        seniorityRank < 1 ||
+        (seniorityLevel != null && group != DutyGroup.senior) ||
+        must.intersection(unavailable).isNotEmpty) {
+      throw ArgumentError('Invalid doctor');
+    }
+  }
+  final String id;
+  final int maxDuties;
+  final Set<int> unavailable, must;
+  final DutyGroup group;
+  final int seniorityRank;
+  final SeniorityLevel? seniorityLevel;
+  final Set<DutyRole> eligibleRoles;
+  final List<DateTime> previousDuties;
+}
+
+/// Daily admin scores; a holiday never adds to the weekday score.
+final class DayDifficulty {
+  const DayDifficulty({
+    required this.weekdayScore,
+    this.holidayName,
+    this.holidayScore,
+  });
+  final int weekdayScore;
+  final String? holidayName;
+  final int? holidayScore;
+  int get effectiveScore => holidayScore != null && holidayScore! > weekdayScore
+      ? holidayScore!
+      : weekdayScore;
+  Map<String, Object?> toMessage() => {
+    'weekdayScore': weekdayScore,
+    'holidayName': holidayName,
+    'holidayScore': holidayScore,
+  };
+}
+
+final class Problem {
+  Problem({
+    required List<Doctor> doctors,
+    required List<int> slotsPerDay,
+    this.startDate,
+    List<DutyRole>? slotRoles,
+    List<SlotRequirement>? slotRequirements,
+    List<DayDifficulty>? dayDifficulties,
+    this.clinicMaxDuties = 8,
+    Map<int, int> fixedAssignments = const {},
+    List<int>? referenceAssignments,
+  }) : fixedAssignments = Map.unmodifiable(fixedAssignments),
+       referenceAssignments = referenceAssignments == null
+           ? null
+           : List.unmodifiable(referenceAssignments),
+       doctors = List.unmodifiable(doctors),
+       slotsPerDay = List.unmodifiable(slotsPerDay),
+       hasExplicitSlotRequirements = slotRequirements != null,
+       slotRoles = slotRoles == null ? null : List.unmodifiable(slotRoles),
+       slotRequirements = List.unmodifiable(
+         slotRequirements ??
+             List.filled(
+               slotsPerDay.fold<int>(0, (a, b) => a + b),
+               SlotRequirement.required,
+             ),
+       ),
+       dayDifficulties = dayDifficulties == null
+           ? null
+           : List.unmodifiable(dayDifficulties) {
+    if (doctors.map((d) => d.id).toSet().length != doctors.length ||
+        slotsPerDay.any((s) => s < 0) ||
+        slotsPerDay.isEmpty ||
+        clinicMaxDuties < 0 ||
+        (dayDifficulties != null &&
+            (startDate == null ||
+                slotRoles == null ||
+                doctors.any(
+                  (d) =>
+                      d.group == DutyGroup.senior && d.seniorityLevel == null,
+                ) ||
+                dayDifficulties.length != slotsPerDay.length ||
+                dayDifficulties.any(
+                  (d) =>
+                      d.weekdayScore < 1 ||
+                      d.weekdayScore > 10 ||
+                      ((d.holidayName == null) != (d.holidayScore == null)) ||
+                      (d.holidayName != null &&
+                          d.holidayName!.trim().isEmpty) ||
+                      (d.holidayScore != null &&
+                          (d.holidayScore! < 1 || d.holidayScore! > 10)),
+                ))) ||
+        doctors.any(
+          (d) =>
+              d.maxDuties > clinicMaxDuties ||
+              d.must.any((day) => day >= slotsPerDay.length),
+        ) ||
+        (slotRequirements != null &&
+            slotRequirements.length !=
+                slotsPerDay.fold<int>(0, (a, b) => a + b)) ||
+        (slotRoles != null &&
+            slotRoles.length != slotsPerDay.fold<int>(0, (a, b) => a + b)) ||
+        (startDate != null &&
+            (!startDate!.isUtc ||
+                startDate!.hour != 0 ||
+                startDate!.minute != 0 ||
+                startDate!.second != 0 ||
+                startDate!.millisecond != 0 ||
+                startDate!.microsecond != 0)) ||
+        doctors.any((d) => d.previousDuties.isNotEmpty && startDate == null) ||
+        doctors.any(
+          (d) => d.previousDuties.any(
+            (x) =>
+                !x.isUtc ||
+                x.hour != 0 ||
+                x.minute != 0 ||
+                x.second != 0 ||
+                x.millisecond != 0 ||
+                x.microsecond != 0 ||
+                !x.isBefore(startDate!),
+          ),
+        )) {
+      throw ArgumentError('Invalid problem');
+    }
+    final slots = slotDays.length;
+    if (fixedAssignments.entries.any(
+          (e) =>
+              e.key < 0 ||
+              e.key >= slots ||
+              e.value < 0 ||
+              e.value >= doctors.length,
+        ) ||
+        (referenceAssignments != null &&
+            (referenceAssignments.length != slots ||
+                referenceAssignments.any(
+                  (d) => d < unfilledSlot || d >= doctors.length,
+                )))) {
+      throw ArgumentError('Invalid fixed/reference assignments');
+    }
+  }
+  final List<Doctor> doctors;
+  final List<int> slotsPerDay;
+  final DateTime? startDate;
+  final List<DutyRole>? slotRoles;
+  final List<SlotRequirement> slotRequirements;
+  final bool hasExplicitSlotRequirements;
+  final List<DayDifficulty>? dayDifficulties;
+  final int clinicMaxDuties;
+
+  /// Exact slot->doctor hard restrictions, including occupied OPTIONAL slots.
+  final Map<int, int> fixedAssignments;
+
+  /// Optional final tie-break only, never part of the 19 clinical components.
+  final List<int>? referenceAssignments;
+  int changedSlotCount(List<int> assignments) {
+    final reference = referenceAssignments;
+    if (reference == null) return 0;
+    if (assignments.length != reference.length) {
+      throw ArgumentError('Slot count mismatch');
+    }
+    var changed = 0;
+    for (var i = 0; i < assignments.length; i++) {
+      if (reference[i] != assignments[i]) changed++;
+    }
+    return changed;
+  }
+
+  int compareClinicalCandidates(Solution a, Solution b) {
+    final order = a.clinicalQuality!.compareTo(b.clinicalQuality!);
+    return order != 0
+        ? order
+        : changedSlotCount(a.assignments)
+              .compareTo(changedSlotCount(b.assignments));
+  }
+
+  DateTime dateForDay(int day) {
+    if (startDate == null || day < 0 || day >= slotsPerDay.length) {
+      throw RangeError('Clinical day/date unavailable');
+    }
+    return startDate!.add(Duration(days: day));
+  }
+
+  int weekdayForDay(int day) => dateForDay(day).weekday;
+  int difficultyForDay(int day) {
+    dateForDay(day);
+    if (dayDifficulties == null) throw StateError('Daily scores unavailable');
+    return dayDifficulties![day].effectiveScore;
+  }
+
+  List<int> get slotDays => [
+    for (var day = 0; day < slotsPerDay.length; day++)
+      for (var i = 0; i < slotsPerDay[day]; i++) day,
+  ];
+  Map<String, Object> toMessage() => {
+    'doctors': [
+      for (final d in doctors)
+        {
+          'id': d.id,
+          'maxDuties': d.maxDuties,
+          'group': d.group.name,
+          'seniorityRank': d.seniorityRank,
+          'seniorityLevel': d.seniorityLevel?.name ?? '',
+          'must': d.must.toList()..sort(),
+          'eligibleRoles': (d.eligibleRoles.map((r) => r.name).toList()
+            ..sort()),
+          'previousDuties': d.previousDuties
+              .map((x) => x.toIso8601String())
+              .toList(),
+          'unavailable': d.unavailable.toList()..sort(),
+        },
+    ],
+    'slotsPerDay': slotsPerDay,
+    'startDate': startDate?.toIso8601String() ?? '',
+    'slotRoles': slotRoles?.map((r) => r.name).toList() ?? <String>[],
+    'hasSlotRoles': slotRoles != null,
+    'slotRequirements': slotRequirements.map((r) => r.name).toList(),
+    'hasExplicitSlotRequirements': hasExplicitSlotRequirements,
+    'clinicMaxDuties': clinicMaxDuties,
+    'fixedAssignments': {
+      for (final e in fixedAssignments.entries) '${e.key}': e.value,
+    },
+    'referenceAssignments': ?referenceAssignments,
+    'hasDayDifficulties': dayDifficulties != null,
+    'dayDifficulties':
+        dayDifficulties?.map((d) => d.toMessage()).toList() ?? [],
+  };
+  factory Problem.fromMessage(Map<String, dynamic> data) => Problem(
+    doctors: [
+      for (final raw in data['doctors'] as List)
+        Doctor(
+          id: raw['id'] as String,
+          maxDuties: raw['maxDuties'] as int,
+          unavailable: Set<int>.from(raw['unavailable'] as List),
+          must: Set<int>.from(raw['must'] as List? ?? []),
+          group: DutyGroup.values.byName(raw['group'] as String? ?? 'senior'),
+          seniorityRank: raw['seniorityRank'] as int? ?? 1,
+          seniorityLevel: (raw['seniorityLevel'] as String? ?? '').isEmpty
+              ? null
+              : SeniorityLevel.values.byName(raw['seniorityLevel'] as String),
+          eligibleRoles: (raw['eligibleRoles'] as List? ?? ['senior', 'junior'])
+              .map((x) => DutyRole.values.byName(x as String))
+              .toSet(),
+          previousDuties: (raw['previousDuties'] as List? ?? [])
+              .map((x) => DateTime.parse(x as String))
+              .toList(),
+        ),
+    ],
+    slotsPerDay: List<int>.from(data['slotsPerDay'] as List),
+    startDate: (data['startDate'] as String? ?? '').isEmpty
+        ? null
+        : DateTime.parse(data['startDate'] as String),
+    slotRoles: data['hasSlotRoles'] == true
+        ? (data['slotRoles'] as List)
+              .map((x) => DutyRole.values.byName(x as String))
+              .toList()
+        : null,
+    clinicMaxDuties: data['clinicMaxDuties'] as int? ?? 8,
+    fixedAssignments: {
+      for (final e in (data['fixedAssignments'] as Map? ?? {}).entries)
+        int.parse(e.key as String): e.value as int,
+    },
+    referenceAssignments: data['referenceAssignments'] == null
+        ? null
+        : List<int>.from(data['referenceAssignments'] as List),
+    slotRequirements: data['hasExplicitSlotRequirements'] == false
+        ? null
+        : (data['slotRequirements'] as List?)
+              ?.map((r) => SlotRequirement.values.byName(r as String))
+              .toList(),
+    dayDifficulties: data['hasDayDifficulties'] == true
+        ? [
+            for (final raw in data['dayDifficulties'] as List)
+              DayDifficulty(
+                weekdayScore: raw['weekdayScore'] as int,
+                holidayName: raw['holidayName'] as String?,
+                holidayScore: raw['holidayScore'] as int?,
+              ),
+          ]
+        : null,
+  );
+}
+
+/// Prototype load-balance vector, distinct from 19-component ClinicalQuality.
+final class PrototypeQuality {
+  PrototypeQuality(List<int> values) : values = List.unmodifiable(values);
+  final List<int> values;
+  Map<String, Object> toMessage() => {
+    'type': 'prototypeQuality',
+    'values': values,
+  };
+  factory PrototypeQuality.fromMessage(Map<String, dynamic> data) {
+    if (data['type'] != 'prototypeQuality' || data['values'] is! List) {
+      throw FormatException('Invalid prototype quality');
+    }
+    return PrototypeQuality(List<int>.from(data['values'] as List));
+  }
+}
+
+final class Solution {
+  Solution(List<int> assignments, List<int> quality, {this.clinicalQuality})
+    : assignments = List.unmodifiable(assignments),
+      prototypeQuality = PrototypeQuality(quality);
+
+  /// Doctor indices in slot order. `quality` is legacy prototype data only;
+  /// the active clinical objective, when present, is `clinicalQuality`.
+  final List<int> assignments;
+  final PrototypeQuality prototypeQuality;
+
+  /// The active objective for clinical snapshots; [quality] stays prototype-only.
+  final ClinicalQuality? clinicalQuality;
+  List<int> get quality => prototypeQuality.values;
+  Map<String, Object> toMessage() => {
+    'assignments': assignments,
+    'quality': quality,
+    if (clinicalQuality != null)
+      'clinicalQuality': clinicalQuality!.toMessage(),
+  };
+  factory Solution.fromMessage(Map<String, dynamic> data) => Solution(
+    List<int>.from(data['assignments'] as List),
+    List<int>.from(data['quality'] as List),
+    clinicalQuality: data['clinicalQuality'] == null
+        ? null
+        : ClinicalQuality.fromMessage(
+            Map<String, dynamic>.from(data['clinicalQuality'] as Map),
+          ),
+  );
+}
+
+enum SearchStatus {
+  paused,
+  optimal,
+  feasibleNotProven,
+  infeasible,
+  timeoutWithoutSolution,
+  cancelled,
+}
+
+enum PauseReason { nodeBudget, deadline, stageTransition }
+
+class SearchResult {
+  const SearchResult(
+    this.status,
+    this.best,
+    this.visitedNodes, {
+    this.pauseReason,
+  });
+  final SearchStatus status;
+  final Solution? best;
+  final int visitedNodes;
+  final PauseReason? pauseReason;
+  bool get canResume => pauseReason != null;
+  Map<String, Object?> toMessage() => {
+    'status': status.name,
+    'best': best?.toMessage(),
+    'visitedNodes': visitedNodes,
+    'pauseReason': pauseReason?.name,
+  };
+}
+
+/// Complete DFS frontier: next candidate cursor per depth and current prefix.
+/// Kept in memory; stepping is synchronous and must be run off the UI thread.
+class SearchSession {
+  SearchSession(
+    this.problem, {
+    this.enablePruning = true,
+    this.mode = OptimizationMode.clinical,
+    this.candidateOrdering = false,
+    this.earlyDeadEnds = false,
+    this.experimentalTwoPhase = false,
+    this.clinicalBounds = false,
+    this.forwardChecking = false,
+    this.profile,
+    this.onFirstIncumbent,
+  }) : _phaseBOwner = null,
+       _allowSubstitution = false,
+       _days = problem.slotDays,
+       _next = List.filled(problem.slotDays.length + 1, 0) {
+    _validateMode();
+  }
+  SearchSession._substitution(
+    this.problem, {
+    this.enablePruning = true,
+    required TransitionSession owner,
+  }) : mode = owner.mode,
+       candidateOrdering = owner.candidateOrdering,
+       earlyDeadEnds = owner.earlyDeadEnds,
+       experimentalTwoPhase = owner.experimentalTwoPhase,
+       clinicalBounds = owner.clinicalBounds,
+       forwardChecking = owner.forwardChecking,
+       profile = owner.profile,
+       onFirstIncumbent = owner.onFirstIncumbent,
+       _phaseBOwner = owner,
+       _allowSubstitution = true,
+       _days = problem.slotDays,
+       _next = List.filled(problem.slotDays.length + 1, 0) {
+    _validateMode();
+  }
+  final Problem problem;
+  final bool enablePruning;
+  final OptimizationMode mode;
+  final bool candidateOrdering, earlyDeadEnds;
+  final bool experimentalTwoPhase;
+  final bool clinicalBounds;
+  final bool forwardChecking;
+  final SearchProfile? profile;
+  final void Function(Solution)? onFirstIncumbent;
+  bool _qualityPhase = false;
+  int? qualityPhaseStartNode;
+  final bool _allowSubstitution;
+  final TransitionSession? _phaseBOwner;
+
+  bool get usesClinicalQuality => mode == OptimizationMode.clinical;
+
+  // Recomputed only from the immutable prefix. Every candidate remains present;
+  // cursors therefore retain their meaning after pause/resume and backtracking.
+  List<int> _orderedCandidates(int depth) {
+    final day = _days[depth];
+    final counts = List<int>.filled(problem.doctors.length, 0);
+    for (final p in _prefix) {
+      if (p >= 0) counts[p]++;
+    }
+    final doctors = List<int>.generate(problem.doctors.length, (i) => i);
+    doctors.sort((a, b) {
+      final mustA = problem.doctors[a].must.contains(day);
+      final mustB = problem.doctors[b].must.contains(day);
+      if (mustA != mustB) return mustA ? -1 : 1;
+      final byCount = counts[a].compareTo(counts[b]);
+      return byCount != 0 ? byCount : a.compareTo(b);
+    });
+    return [
+      if (!_qualityPhase &&
+          problem.slotRequirements[depth] == SlotRequirement.optional)
+        unfilledSlot,
+      ...doctors,
+      if (_qualityPhase &&
+          problem.slotRequirements[depth] == SlotRequirement.optional)
+        unfilledSlot,
+    ];
+  }
+
+  // A missed mandatory day cannot be repaired once all slots of that day have
+  // passed. The prefix includes every decision on those calendar days.
+  bool _missedMandatoryDay() {
+    final nextDay = _prefix.length < _days.length
+        ? _days[_prefix.length]
+        : problem.slotsPerDay.length;
+    for (var doctor = 0; doctor < problem.doctors.length; doctor++) {
+      for (final day in problem.doctors[doctor].must) {
+        if (day >= nextDay) continue;
+        var found = false;
+        for (var i = 0; i < _prefix.length; i++) {
+          if (_days[i] == day && _prefix[i] == doctor) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) return true;
+      }
+    }
+    return false;
+  }
+
+  void _validateMode() {
+    if (problem.referenceAssignments != null && !usesClinicalQuality) {
+      throw ArgumentError('Reference tie-break requires clinical mode');
+    }
+    if (clinicalBounds && !usesClinicalQuality) {
+      throw ArgumentError('Clinical bounds require clinical mode');
+    }
+    if (experimentalTwoPhase &&
+        (!usesClinicalQuality || !candidateOrdering || !earlyDeadEnds)) {
+      throw ArgumentError(
+        'Two-phase search requires clinical combined strategy',
+      );
+    }
+    if (usesClinicalQuality &&
+        (problem.startDate == null ||
+            problem.slotRoles == null ||
+            !problem.hasExplicitSlotRequirements ||
+            problem.dayDifficulties == null ||
+            problem.doctors.any(
+              (d) => d.group == DutyGroup.senior && d.seniorityLevel == null,
+            ))) {
+      throw ArgumentError(
+        'Invalid clinical snapshot: date, roles, explicit slot requirements, scores and senior levels are required',
+      );
+    }
+  }
+
+  final List<int> _days, _next;
+  final List<int> _prefix = [];
+  Solution? _best;
+  int visitedNodes = 0;
+  int incumbentImprovements = 0;
+  int clinicalBoundChecks = 0, clinicalPruned = 0, clinicalBoundTicks = 0;
+  int mandatoryPruned = 0, feasibilityPruned = 0;
+  int? firstFeasibleNode;
+  bool _complete = false;
+  bool _cancelled = false;
+  bool _running = false;
+  void cancel() => _cancelled = true;
+  Solution? get best => _best;
+
+  bool _allowed(int doctor, int depth) {
+    final fixed = problem.fixedAssignments[depth];
+    if (fixed != null && fixed != doctor) return false;
+    final d = problem.doctors[doctor], day = _days[depth];
+    if (d.unavailable.contains(day)) return false;
+    final role = problem.slotRoles?[depth];
+    if (role != null &&
+        (!d.eligibleRoles.contains(role) ||
+            (role == DutyRole.senior &&
+                d.group != DutyGroup.senior &&
+                !_allowSubstitution) ||
+            (role == DutyRole.junior && d.group != DutyGroup.junior))) {
+      return false;
+    }
+    if (problem.startDate != null &&
+        d.previousDuties.any(
+          (x) =>
+              problem.startDate!.add(Duration(days: day)).difference(x).inDays <
+              3,
+        )) {
+      return false;
+    }
+    var count = 0;
+    for (var i = 0; i < _prefix.length; i++) {
+      if (_prefix[i] == doctor) {
+        count++;
+        if ((day - _days[i]).abs() < 3) return false;
+      }
+    }
+    return count < d.maxDuties;
+  }
+
+  // Necessary, optimistic domains only: never reserve a future candidate for
+  // another slot. Empty domains prove this prefix impossible; nonempty domains
+  // do not establish simultaneous feasibility. A/B roles remain in _allowed.
+  bool _emptyRequiredDomain() {
+    final watch = Stopwatch()..start();
+    forwardChecks++;
+    try {
+      for (var slot = _prefix.length; slot < _days.length; slot++) {
+        if (problem.slotRequirements[slot] != SlotRequirement.required) {
+          continue;
+        }
+        final day = _days[slot];
+        var possible = false;
+        for (var doctor = 0; doctor < problem.doctors.length; doctor++) {
+          if (!_allowed(doctor, slot)) continue;
+          // Must dates are fixed hard obligations, not guessed assignments.
+          // Assigning this day cannot erase an obligation on a nearby other day.
+          if (problem.doctors[doctor].must.any(
+            (mustDay) => mustDay != day && (mustDay - day).abs() < 3,
+          )) {
+            continue;
+          }
+          possible = true;
+          break;
+        }
+        if (!possible) {
+          forwardPruned++;
+          return true;
+        }
+      }
+      return false;
+    } finally {
+      watch.stop();
+      forwardCheckTicks += watch.elapsedTicks;
+    }
+  }
+
+  int forwardChecks = 0, forwardPruned = 0, forwardCheckTicks = 0;
+  int forwardRootPruned = 0;
+  bool _forwardRootChecked = false;
+
+  // Relax spacing and availability: this enlarges the feasible set, so the
+  // resulting load bounds can never be greater than a real completion's score.
+  bool _prune() {
+    final counts = List<int>.filled(problem.doctors.length, 0);
+    for (final p in _prefix) {
+      if (p != unfilledSlot) counts[p]++;
+    }
+    final remaining = _days.length - _prefix.length;
+    final requiredRemaining = problem.slotRequirements
+        .skip(_prefix.length)
+        .where((r) => r == SlotRequirement.required)
+        .length;
+    var capacity = 0;
+    for (var i = 0; i < counts.length; i++) {
+      capacity += problem.doctors[i].maxDuties - counts[i];
+    }
+    if (capacity < requiredRemaining) return true;
+    // With optional slots, final assigned total is not fixed. Stage-1.2 load
+    // bounds assume every remaining slot is filled and are therefore disabled.
+    if (usesClinicalQuality ||
+        problem.slotRequirements.contains(SlotRequirement.optional) ||
+        _best == null ||
+        counts.isEmpty ||
+        _allowSubstitution) {
+      return false;
+    }
+    final total = _days.length;
+    final maxCurrent = counts.reduce((a, b) => a > b ? a : b);
+    final lowerRange = (maxCurrent - total ~/ counts.length).clamp(0, total);
+    // Water-filling without individual upper bounds gives minimum sum of squares.
+    final relaxed = [...counts];
+    for (var i = 0; i < remaining; i++) {
+      var minIndex = 0;
+      for (var j = 1; j < relaxed.length; j++) {
+        if (relaxed[j] < relaxed[minIndex]) minIndex = j;
+      }
+      relaxed[minIndex]++;
+    }
+    final lowerSquares = relaxed.fold<int>(0, (a, b) => a + b * b);
+    final incumbent = _best!.quality;
+    return lowerRange > incumbent[0] ||
+        (lowerRange == incumbent[0] && lowerSquares >= incumbent[1]);
+  }
+
+  bool _better(List<int> a, List<int> b) {
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return a[i] < b[i];
+    }
+    return false;
+  }
+
+  bool _cannotBeatIncumbentPrefix() {
+    if (!clinicalBounds || _best == null) return false;
+    final timer = Stopwatch()..start();
+    final optimistic = optimisticClinicalPrefix(
+      problem,
+      _prefix,
+      allowSubstitution: _allowSubstitution,
+    );
+    var reject = false;
+    for (var i = 0; i < optimistic.length; i++) {
+      final order = Exact.integer(optimistic[i])
+          .compareTo(_best!.clinicalQuality!.components[i]);
+      if (order != 0) {
+        reject = order > 0;
+        break;
+      }
+    }
+    timer.stop();
+    clinicalBoundChecks++;
+    clinicalBoundTicks += timer.elapsedTicks;
+    if (reject) clinicalPruned++;
+    return reject;
+  }
+
+  bool _shouldPrune() {
+    if (forwardChecking && _emptyRequiredDomain()) return true;
+    if (earlyDeadEnds && _missedMandatoryDay()) {
+      mandatoryPruned++;
+      return true;
+    }
+    if (enablePruning && _prune()) {
+      feasibilityPruned++;
+      return true;
+    }
+    return _cannotBeatIncumbentPrefix();
+  }
+
+  void _evaluate() {
+    final counts = List<int>.filled(problem.doctors.length, 0);
+    for (final p in _prefix) {
+      if (p != unfilledSlot) counts[p]++;
+    }
+    final sorted = [...counts]..sort();
+    final q = [
+      if (_allowSubstitution)
+        for (final n in [
+          List.generate(_prefix.length, (i) => i)
+              .where(
+                (i) =>
+                    problem.slotRoles?[i] == DutyRole.senior &&
+                    _prefix[i] != unfilledSlot &&
+                    problem.doctors[_prefix[i]].group == DutyGroup.junior,
+              )
+              .length,
+        ])
+          n,
+      if (sorted.isEmpty) 0 else sorted.last - sorted.first,
+      counts.fold<int>(0, (sum, n) => sum + n * n),
+    ];
+    final candidate = Solution(_prefix, q);
+    if (usesClinicalQuality) {
+      final evaluator = const ClinicalQualityEvaluator();
+      final timer = profile == null ? null : (Stopwatch()..start());
+      final clinical = _allowSubstitution
+          ? evaluator.evaluatePhaseBCandidate(
+              problem,
+              candidate,
+              session: _phaseBOwner!,
+            )
+          : evaluator.evaluate(problem, candidate);
+      if (timer != null) {
+        timer.stop();
+        profile!.qualityCalls++;
+        profile!.qualityTicks += timer.elapsedTicks;
+      }
+      final clinicalOrder = _best == null
+          ? -1
+          : clinical.compareTo(_best!.clinicalQuality!);
+      final closerReference =
+          clinicalOrder == 0 &&
+          problem.referenceAssignments != null &&
+          problem.changedSlotCount(_prefix) <
+              problem.changedSlotCount(_best!.assignments);
+      if (_best == null || clinicalOrder < 0 || closerReference) {
+        final first = _best == null;
+        firstFeasibleNode ??= visitedNodes;
+        if (_best != null) incumbentImprovements++;
+        _best = Solution(_prefix, q, clinicalQuality: clinical);
+        if (first) onFirstIncumbent?.call(_best!);
+      }
+    } else if (_best == null || _better(q, _best!.quality)) {
+      final first = _best == null;
+      firstFeasibleNode ??= visitedNodes;
+      if (_best != null) incumbentImprovements++;
+      _best = candidate;
+      if (first) onFirstIncumbent?.call(_best!);
+    }
+  }
+
+  /// [maxNodes] provides deterministic cooperative pauses. A deadline is a
+  /// per-call safety limit, not a proof; it can yield different partial results.
+  SearchResult run({required int maxNodes, Duration? timeLimit}) {
+    if (_running) throw StateError('Search session cannot be re-entered');
+    _running = true;
+    try {
+      return _runInternal(maxNodes: maxNodes, timeLimit: timeLimit);
+    } finally {
+      _running = false;
+    }
+  }
+
+  SearchResult _runInternal({required int maxNodes, Duration? timeLimit}) {
+    if (maxNodes < 0 || (timeLimit != null && timeLimit.isNegative)) {
+      throw ArgumentError('Invalid budget');
+    }
+    if (_cancelled) {
+      return SearchResult(SearchStatus.cancelled, _best, visitedNodes);
+    }
+    if (_complete) {
+      return SearchResult(
+        _best == null ? SearchStatus.infeasible : SearchStatus.optimal,
+        _best,
+        visitedNodes,
+      );
+    }
+    final watch = Stopwatch()..start();
+    var stepNodes = 0;
+    while (true) {
+      if (_cancelled) {
+        return SearchResult(SearchStatus.cancelled, _best, visitedNodes);
+      }
+      if (timeLimit != null && watch.elapsed >= timeLimit) {
+        return SearchResult(
+          _best == null
+              ? SearchStatus.timeoutWithoutSolution
+              : SearchStatus.feasibleNotProven,
+          _best,
+          visitedNodes,
+          pauseReason: PauseReason.deadline,
+        );
+      }
+      if (stepNodes >= maxNodes) {
+        return SearchResult(
+          _best == null ? SearchStatus.paused : SearchStatus.feasibleNotProven,
+          _best,
+          visitedNodes,
+          pauseReason: PauseReason.nodeBudget,
+        );
+      }
+      // Honor cancellation/deadline/node-budget before starting the atomic check.
+      if (forwardChecking && !_forwardRootChecked) {
+        _forwardRootChecked = true;
+        if (_emptyRequiredDomain()) {
+          forwardRootPruned++;
+          _complete = true;
+          return SearchResult(SearchStatus.infeasible, null, visitedNodes);
+        }
+      }
+      final depth = _prefix.length;
+      if (depth == _days.length) {
+        final valid = problem.doctors.asMap().entries.every(
+          (entry) => entry.value.must.every(
+            (day) => List.generate(
+              _prefix.length,
+              (i) => i,
+            ).any((i) => _prefix[i] == entry.key && _days[i] == day),
+          ),
+        );
+        if (profile != null) {
+          profile!.completedLeaves++;
+          if (valid) {
+            profile!.validLeaves++;
+          } else {
+            profile!.invalidLeaves++;
+          }
+        }
+        if (valid) {
+          _evaluate();
+          if (experimentalTwoPhase && !_qualityPhase && _best != null) {
+            final validationTimer = profile == null
+                ? null
+                : (Stopwatch()..start());
+            final check = const SolutionValidator().validate(
+              problem,
+              _best!,
+              localEvidence: _phaseBOwner,
+            );
+            if (validationTimer != null) {
+              validationTimer.stop();
+              profile!.firstValidationCalls++;
+              profile!.firstValidationTicks += validationTimer.elapsedTicks;
+            }
+            if (!check.isValid) {
+              throw StateError('Invalid first incumbent: ${check.errors}');
+            }
+            _qualityPhase = true;
+            qualityPhaseStartNode = visitedNodes;
+            _prefix.clear();
+            _next.fillRange(0, _next.length, 0);
+            continue;
+          }
+        }
+        if (depth == 0) {
+          _complete = true;
+          return SearchResult(
+            _best == null ? SearchStatus.infeasible : SearchStatus.optimal,
+            _best,
+            visitedNodes,
+          );
+        }
+        _prefix.removeLast();
+        continue;
+      }
+      final candidateCount =
+          problem.doctors.length +
+          (problem.slotRequirements[depth] == SlotRequirement.optional ? 1 : 0);
+      if (_next[depth] >= candidateCount) {
+        _next[depth] = 0;
+        if (depth == 0) {
+          _complete = true;
+        } else {
+          _prefix.removeLast();
+        }
+        if (_complete) {
+          return SearchResult(
+            _best == null ? SearchStatus.infeasible : SearchStatus.optimal,
+            _best,
+            visitedNodes,
+          );
+        }
+        continue;
+      }
+      final index = _next[depth]++;
+      final candidate = candidateOrdering
+          ? _orderedCandidates(depth)[index]
+          : index == problem.doctors.length
+          ? unfilledSlot
+          : index;
+      visitedNodes++;
+      stepNodes++;
+      if (profile != null) {
+        if (candidate == unfilledSlot) {
+          profile!.emptyOptionalChoices++;
+          profile!.emptyOptionalByDepth[depth] =
+              (profile!.emptyOptionalByDepth[depth] ?? 0) + 1;
+        }
+        if (firstFeasibleNode != null) {
+          profile!.postFirstNodesByDepth[depth] =
+              (profile!.postFirstNodesByDepth[depth] ?? 0) + 1;
+        }
+      }
+      final hardTimer = profile != null && candidate != unfilledSlot
+          ? (Stopwatch()..start())
+          : null;
+      final allowed = candidate == unfilledSlot
+          ? !problem.fixedAssignments.containsKey(depth)
+          : _allowed(candidate, depth);
+      if (hardTimer != null) {
+        hardTimer.stop();
+        profile!.hardCalls++;
+        profile!.hardTicks += hardTimer.elapsedTicks;
+      }
+      if (allowed) {
+        _prefix.add(candidate);
+        if (_shouldPrune()) {
+          _prefix.removeLast();
+        } else {
+          _next[depth + 1] = 0;
+        }
+      }
+    }
+  }
+}
+
+/// Process-local two-phase capability. A client-provided serialized claim cannot
+/// construct the private phase-B engine or change a completed phase-A verdict.
+enum TransitionPhase { restricted, substitution, done }
+
+enum RestrictedVerdict { pending, feasible, provenInfeasible, cancelled }
+
+final class TransitionSession {
+  TransitionSession(
+    Problem input, {
+    this.enablePruning = true,
+    this.mode = OptimizationMode.clinical,
+    this.candidateOrdering = false,
+    this.earlyDeadEnds = false,
+    this.experimentalTwoPhase = false,
+    this.clinicalBounds = false,
+    this.forwardChecking = false,
+    this.profile,
+    this.onFirstIncumbent,
+  }) : problem = Problem.fromMessage(input.toMessage()) {
+    if (problem.startDate == null || problem.slotRoles == null) {
+      throw ArgumentError('Clinical date and roles required');
+    }
+    _restricted = SearchSession(
+      problem,
+      enablePruning: enablePruning,
+      mode: mode,
+      candidateOrdering: candidateOrdering,
+      earlyDeadEnds: earlyDeadEnds,
+      experimentalTwoPhase: experimentalTwoPhase,
+      clinicalBounds: clinicalBounds,
+      forwardChecking: forwardChecking,
+      profile: profile,
+      onFirstIncumbent: onFirstIncumbent,
+    );
+  }
+  final Problem problem;
+  final bool enablePruning;
+  final OptimizationMode mode;
+  final bool candidateOrdering, earlyDeadEnds;
+  final bool experimentalTwoPhase;
+  final bool clinicalBounds;
+  final bool forwardChecking;
+  final SearchProfile? profile;
+  final void Function(Solution)? onFirstIncumbent;
+  int? get qualityPhaseStartNode =>
+      _substitution?.qualityPhaseStartNode ?? _restricted.qualityPhaseStartNode;
+  int get clinicalBoundChecks =>
+      _restricted.clinicalBoundChecks +
+      (_substitution?.clinicalBoundChecks ?? 0);
+  int get clinicalPruned =>
+      _restricted.clinicalPruned + (_substitution?.clinicalPruned ?? 0);
+  int get mandatoryPruned =>
+      _restricted.mandatoryPruned + (_substitution?.mandatoryPruned ?? 0);
+  int get feasibilityPruned =>
+      _restricted.feasibilityPruned + (_substitution?.feasibilityPruned ?? 0);
+  int get clinicalBoundTicks =>
+      _restricted.clinicalBoundTicks + (_substitution?.clinicalBoundTicks ?? 0);
+
+  /// Cumulative across A and B; SearchResult.visitedNodes is phase-local.
+  int get totalVisitedNodes =>
+      _restricted.visitedNodes + (_substitution?.visitedNodes ?? 0);
+  int get forwardChecks =>
+      _restricted.forwardChecks + (_substitution?.forwardChecks ?? 0);
+  int get forwardPruned =>
+      _restricted.forwardPruned + (_substitution?.forwardPruned ?? 0);
+  int get forwardRootPruned =>
+      _restricted.forwardRootPruned + (_substitution?.forwardRootPruned ?? 0);
+  int get forwardCheckTicks =>
+      _restricted.forwardCheckTicks + (_substitution?.forwardCheckTicks ?? 0);
+
+  /// Strict incumbent replacements after each phase's first solution.
+  int get incumbentImprovements =>
+      _restricted.incumbentImprovements +
+      (_substitution?.incumbentImprovements ?? 0);
+  late final SearchSession _restricted;
+  SearchSession? _substitution;
+  RestrictedVerdict _verdict = RestrictedVerdict.pending;
+  RestrictedVerdict get restrictedVerdict => _verdict;
+  TransitionPhase get phase => _substitution == null
+      ? (_restrictedDone || _cancelled
+            ? TransitionPhase.done
+            : TransitionPhase.restricted)
+      : (_phaseBDone || _cancelled
+            ? TransitionPhase.done
+            : TransitionPhase.substitution);
+  bool _restrictedDone = false;
+  bool _phaseBDone = false;
+  bool _cancelled = false;
+  void cancel() {
+    _cancelled = true;
+    _restricted.cancel();
+    _substitution?.cancel();
+    if (_verdict == RestrictedVerdict.pending) {
+      _verdict = RestrictedVerdict.cancelled;
+    }
+  }
+
+  SearchResult run({required int maxNodes, Duration? timeLimit}) {
+    if (_cancelled) {
+      return SearchResult(
+        SearchStatus.cancelled,
+        _substitution?.best ?? _restricted.best,
+        _substitution?.visitedNodes ?? _restricted.visitedNodes,
+      );
+    }
+    if (_substitution != null) {
+      final result = _substitution!.run(
+        maxNodes: maxNodes,
+        timeLimit: timeLimit,
+      );
+      if (result.status == SearchStatus.optimal ||
+          result.status == SearchStatus.infeasible) {
+        _phaseBDone = true;
+      }
+      return result;
+    }
+    final result = _restricted.run(maxNodes: maxNodes, timeLimit: timeLimit);
+    if (result.best != null) {
+      _verdict = RestrictedVerdict.feasible;
+      if (result.status == SearchStatus.optimal) _restrictedDone = true;
+      return result;
+    }
+    if (result.status == SearchStatus.infeasible) {
+      _verdict = RestrictedVerdict.provenInfeasible;
+      _substitution = SearchSession._substitution(
+        problem,
+        enablePruning: enablePruning,
+        owner: this,
+      );
+      return SearchResult(
+        SearchStatus.paused,
+        null,
+        result.visitedNodes,
+        pauseReason: PauseReason.stageTransition,
+      );
+    }
+    return result;
+  }
+
+  /// Process-local check only: not a portable certificate, and never authorizes
+  /// durable writes. Bind both the exact snapshot and phase-B assignment.
+  /// Candidate-only capability: requires this genuine live B phase and the
+  /// identical immutable snapshot. It is not a transferable proof.
+  bool permitsPhaseBCandidate(Problem snapshot) =>
+      identical(snapshot, problem) &&
+      _verdict == RestrictedVerdict.provenInfeasible &&
+      _substitution != null &&
+      !_cancelled &&
+      !_phaseBDone;
+
+  bool verifiesLocalTransition(Problem snapshot, Solution solution) {
+    if (!identical(snapshot, problem) ||
+        _verdict != RestrictedVerdict.provenInfeasible ||
+        _substitution?.best == null) {
+      return false;
+    }
+    final b = _substitution!.best!;
+    return b.assignments.length == solution.assignments.length &&
+        b.quality.length == solution.quality.length &&
+        List.generate(
+          b.assignments.length,
+          (i) => b.assignments[i] == solution.assignments[i],
+        ).every((v) => v) &&
+        List.generate(
+          b.quality.length,
+          (i) => b.quality[i] == solution.quality[i],
+        ).every((v) => v);
+  }
+}

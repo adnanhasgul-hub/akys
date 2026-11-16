@@ -19,10 +19,92 @@ service cloud.firestore {
       ]);
       allow delete: if isAdmin();
     }
+    // V2: approval is CLOSED until a trusted clinical validation service exists.
+    match /v2_schedules/{scheduleId} {
+      function headPath() { return /databases/$(database)/documents/v2_schedules/$(scheduleId); }
+      function validHead(d) {
+        return d.keys().hasOnly(['schema','version','status','year','month','actor','at','operationId','summary','sourceId','sourceVersion','createdBy','createdAt','historySchema'])
+          && d.keys().hasAll(['schema','version','status','year','month','actor','at','operationId','summary','sourceId','sourceVersion','createdBy','createdAt'])
+          && (!('historySchema' in d) || d.historySchema == 2)
+          && d.schema == 1 && d.version is int && d.version > 0
+          && d.status in ['draft','archived'] && d.year is int && d.year >= 2000 && d.year <= 2100
+          && d.month is int && d.month >= 1 && d.month <= 12
+          && d.actor == request.auth.uid && d.at == request.time
+          && d.operationId is string && d.operationId.matches('^[a-zA-Z0-9_-]{20,64}$')
+          && d.summary is string && d.summary.size() <= 500
+          && ((d.sourceId == null && d.sourceVersion == null) ||
+            (d.sourceId is string && d.sourceVersion is int && d.sourceVersion > 0
+            && exists(/databases/$(database)/documents/v2_schedules/$(d.sourceId)/versions/$(string(d.sourceVersion)))));
+      }
+      function linked(d) {
+        let version = getAfter(/databases/$(database)/documents/v2_schedules/$(scheduleId)/versions/$(string(d.version))).data;
+        let event = getAfter(/databases/$(database)/documents/v2_schedules/$(scheduleId)/events/$(d.operationId)).data;
+        return (d.get('historySchema', 1) != 2 ||
+            getAfter(/databases/$(database)/documents/v2_schedules/$(scheduleId)/version_metadata/$(string(d.version))).data == d)
+          && version.diff(d).affectedKeys().hasOnly(['payload'])
+          && version.keys().size() == d.keys().size() + 1
+          && version.payload is string && version.payload.size() <= 650000
+          && event.actor == request.auth.uid && event.at == request.time
+          && event.version == d.version && event.operationId == d.operationId;
+      }
+      allow read: if isAdmin();
+      allow create: if isAdmin() && validHead(request.resource.data) && linked(request.resource.data)
+        && request.resource.data.version == 1 && request.resource.data.status == 'draft'
+        && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
+      allow update: if isAdmin() && resource.data.status == 'draft'
+        && validHead(request.resource.data) && linked(request.resource.data)
+        && request.resource.data.get('historySchema', 1) == resource.data.get('historySchema', 1)
+        && request.resource.data.version == resource.data.version + 1
+        && request.resource.data.year == resource.data.year && request.resource.data.month == resource.data.month
+        && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.sourceId == resource.data.sourceId && request.resource.data.sourceVersion == resource.data.sourceVersion;
+      allow delete: if false;
+      match /versions/{versionId} {
+        allow read: if isAdmin();
+        allow create: if isAdmin()
+          && versionId == string(request.resource.data.version)
+          && (!exists(headPath()) || getAfter(headPath()).data.version == get(headPath()).data.version + 1)
+          && getAfter(headPath()).data.version == request.resource.data.version
+          && getAfter(headPath()).data.at == request.time
+          && request.resource.data.diff(getAfter(headPath()).data).affectedKeys().hasOnly(['payload'])
+          && request.resource.data.keys().size() == getAfter(headPath()).data.keys().size()+1
+          && request.resource.data.payload is string && request.resource.data.payload.size() <= 650000;
+        allow update, delete: if false;
+      }
+      match /version_metadata/{versionId} {
+        allow read: if isAdmin();
+        allow create: if isAdmin()
+          && versionId == string(request.resource.data.version)
+          && request.resource.data.get('historySchema', 1) == 2
+          && request.resource.data == getAfter(headPath()).data
+          && getAfter(headPath()).data.at == request.time
+          && (!exists(headPath()) || getAfter(headPath()).data.version == get(headPath()).data.version + 1);
+        allow update, delete: if false;
+      }
+      match /events/{eventId} {
+        allow read: if isAdmin();
+        allow create: if isAdmin()
+          && request.resource.data.keys().hasOnly(['action','actor','at','version','operationId'])
+          && request.resource.data.actor == request.auth.uid && request.resource.data.at == request.time
+          && request.resource.data.operationId == eventId && eventId.matches('^[a-zA-Z0-9_-]{20,64}$')
+          && request.resource.data.version is int
+          && (
+            (request.resource.data.action in ['approvalAttempt','approvalRejected']
+              && exists(/databases/$(database)/documents/v2_schedules/$(scheduleId)/versions/$(string(request.resource.data.version))))
+            || (getAfter(headPath()).data.operationId == eventId && getAfter(headPath()).data.at == request.time
+              && getAfter(headPath()).data.version == request.resource.data.version
+              && request.resource.data.action == (
+                getAfter(headPath()).data.status == 'archived' ? 'archived' :
+                request.resource.data.version > 1 ? 'draftUpdated' :
+                getAfter(headPath()).data.sourceId == null ? 'draftCreated' : 'revisionCreated'))
+          );
+        allow update, delete: if false;
+      }
+    }
     match /{collection}/{document=**} {
       // The original admin-only boundary is retained for all private data.
       // Exclude shares so the projection write allowlist cannot be bypassed.
-      allow read, write: if isAdmin() && collection != 'shared_schedules';
+      allow read, write: if isAdmin() && collection != 'shared_schedules' && collection != 'v2_schedules';
     }
   }
 }

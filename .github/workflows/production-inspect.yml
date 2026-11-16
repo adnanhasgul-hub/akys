@@ -1,0 +1,41 @@
+name: Production read-only inspection (OIDC)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: production-inspect
+  cancel-in-progress: false
+jobs:
+  inspect:
+    if: github.repository == 'adnanhasgul-hub/akys' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production-readonly
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix tool/firestore-tests --no-audit --no-fund
+      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          project_id: akys-d708a
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          cleanup_credentials: true
+      - run: node tool/deployment/inspect.cjs
+        env:
+          NODE_PATH: tool/firestore-tests/node_modules
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-inspection-${{ github.run_id }}
+          path: production-inspection/
+          retention-days: 7
+          if-no-files-found: error

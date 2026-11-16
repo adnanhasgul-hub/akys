@@ -7,10 +7,6 @@ import 'auth_state.dart';
 
 class FirebaseAuthService extends AuthService {
   FirebaseAuthService(this._auth) {
-    _authSubscription = _auth.authStateChanges().listen(
-      _resolve,
-      onError: (Object _) => _failClosed(),
-    );
     // Claim refreshes must also invalidate previously rendered private content.
     _tokenSubscription = _auth.idTokenChanges().listen(
       _resolve,
@@ -20,7 +16,6 @@ class FirebaseAuthService extends AuthService {
 
   final FirebaseAuth _auth;
   final _authorization = const AdminAuthorization();
-  late final StreamSubscription<User?> _authSubscription;
   late final StreamSubscription<User?> _tokenSubscription;
   AuthState _state = const AuthState(AuthStatus.checking);
   int _generation = 0;
@@ -31,7 +26,7 @@ class FirebaseAuthService extends AuthService {
 
   void _emit(AuthStatus status) {
     if (_disposed) return;
-    _state = AuthState(status);
+    _state = AuthState(status, userId: _auth.currentUser?.uid);
     notifyListeners();
   }
 
@@ -72,11 +67,25 @@ class FirebaseAuthService extends AuthService {
         password: password,
       );
     } on FirebaseAuthException catch (error) {
-      throw AuthFailure(authErrorMessage(error.code));
+      throw AuthFailure('${authErrorMessage(error.code)} (${error.code})');
     } catch (_) {
       throw const AuthFailure(
         'Giriş şu anda tamamlanamadı. Lütfen tekrar deneyin.',
       );
+    }
+  }
+
+  @override
+  Future<void> refreshAuthorization() async {
+    final user = _auth.currentUser;
+    final generation = ++_generation;
+    _emit(AuthStatus.checking);
+    try {
+      await user?.getIdTokenResult(true);
+      if (_disposed || _auth.currentUser?.uid != user?.uid) return;
+      await _resolve(_auth.currentUser);
+    } catch (_) {
+      if (!_disposed && generation == _generation) _failClosed();
     }
   }
 
@@ -98,7 +107,6 @@ class FirebaseAuthService extends AuthService {
   void dispose() {
     _disposed = true;
     _generation++;
-    unawaited(_authSubscription.cancel());
     unawaited(_tokenSubscription.cancel());
     super.dispose();
   }

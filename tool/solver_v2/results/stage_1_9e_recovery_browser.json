@@ -1,0 +1,11 @@
+{
+  "checks": [
+    "owner isolation",
+    "reload recovery",
+    "nonextractable AES-GCM key; no plaintext persisted",
+    "ciphertext tampering rejected",
+    "delete clears recovery"
+  ],
+  "pass": true,
+  "chromium": "154.0.8037.57"
+}

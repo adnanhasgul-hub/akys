@@ -1,0 +1,31 @@
+# REVIEW TEMPLATE ONLY. Not a deployable production artifact.
+# The current binary is emulator-only; production adapter and security gate are pending.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: akys-v2-approval
+  annotations:
+    run.googleapis.com/ingress: internal
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: '0'
+        autoscaling.knative.dev/maxScale: '2'
+    spec:
+      serviceAccountName: akys-v2-approval@akys-d708a.iam.gserviceaccount.com
+      containerConcurrency: 4
+      timeoutSeconds: 30
+      containers:
+        - image: REPLACE_WITH_REVIEWED_IMAGE_DIGEST
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: '1'
+              memory: 512Mi
+          env:
+            - name: APPROVAL_ENABLED
+              value: 'false'
+            - name: FIREBASE_PROJECT_ID
+              value: akys-d708a

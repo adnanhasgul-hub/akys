@@ -1,0 +1,65 @@
+{
+  "baseCommit": "e6d88210b3e3bfc8f6a6fddef716bb39d1718ff9",
+  "branch": "feature/akys-v2-solver-core",
+  "flutterTests": {
+    "passed": 268,
+    "failed": 0,
+    "retiredV1Cases": 237,
+    "newCases": 4
+  },
+  "chromiumTests": {
+    "fullSuitePassed": 60,
+    "updatedSessionSuitePassed": 5,
+    "distinctPassed": 61,
+    "failed": 0
+  },
+  "workerScenarios": {
+    "passed": 18,
+    "failed": 0
+  },
+  "rulesChecks": {
+    "v2": 47,
+    "passed": true,
+    "legacyDataBoundaryRegression": true
+  },
+  "flutterAnalyze": "PASS",
+  "dartAnalyze": "PASS",
+  "builds": {
+    "standardWebRelease": "PASS",
+    "standardAndroidDebug": "PASS",
+    "localEmulatorRelease": "PASS"
+  },
+  "deviceTest": {
+    "adbDevices": [],
+    "performed": false
+  },
+  "authAcceptance": {
+    "checks": [
+      "existing Auth UI admin claim, incomplete draft + doctor + lock saved atomically",
+      "page reload, server list/open, doctor and lock restored",
+      "real offline transaction failure preserves draft; online same-operation retry succeeds",
+      "revision and append-only version history; approval remains disabled and rejection logged",
+      "same-document logout and different non-admin login: no reload; private UI blocked",
+      "admin claim grant refresh opens fresh workspace without prior-user draft",
+      "admin claim revoke refresh closes private workspace"
+    ],
+    "errors": [],
+    "externalFirebaseRequests": [],
+    "chromium": "154.0.8037.57",
+    "pass": true
+  },
+  "productionConfiguredBuildOnly": true,
+  "productionExecuted": false,
+  "productionDataModified": false,
+  "approvalEnabled": false,
+  "BApprovalEnabled": false,
+  "initialTestSelectionFailure": "An overbroad Chromium command included five VM-only workspace runtime tests; they timed out because the package test server does not package the worker asset. All five pass in the native suite; web runtime is separately verified with the real compiled Worker acceptance harness. No tests were disabled.",
+  "files": {
+    "coreDiff": []
+  },
+  "artifacts": {
+    "build/web/main.dart.js": "14522a7fcd4d06f5fb30ece6062e2e82f70cf88fd2d0e5794b761a0c5956fe71",
+    "build/web/akys_v2_worker.js": "19019a84346a55dbd9446c9e5807f77d78038ea4a4590cd0a2fa70cef85459e7",
+    "build/app/outputs/flutter-apk/app-debug.apk": "3e1e023ff4b2cb4ee685152a8462eceba41ae8f2873a1d5079f7cb1937a6ddb1"
+  }
+}

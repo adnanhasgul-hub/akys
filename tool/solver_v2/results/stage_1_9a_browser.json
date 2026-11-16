@@ -1,0 +1,133 @@
+{
+  "tests": 18,
+  "passed": 18,
+  "rows": [
+    {
+      "test": "real worker starts and completes with main validator",
+      "pass": true,
+      "ms": 131
+    },
+    {
+      "measurement": "uiHeartbeat",
+      "ticks": 226,
+      "maxGapUs": 10199,
+      "events": 17,
+      "nodes": 114497
+    },
+    {
+      "test": "main event loop responsive; extend during active search preserves frontier",
+      "pass": true,
+      "ms": 1148
+    },
+    {
+      "test": "timeout without solution then true continuation",
+      "pass": true,
+      "ms": 38
+    },
+    {
+      "test": "cooperative cancel before first solution in a running worker",
+      "pass": true,
+      "ms": 36
+    },
+    {
+      "test": "timeout with incumbent resumes nonempty frontier without restart",
+      "pass": true,
+      "ms": 736
+    },
+    {
+      "test": "cancel before solution",
+      "pass": true,
+      "ms": 3
+    },
+    {
+      "measurement": "cancelLatency",
+      "us": 8099
+    },
+    {
+      "test": "cooperative cancel after first solution retains validated incumbent",
+      "pass": true,
+      "ms": 61
+    },
+    {
+      "test": "forced cancel retains last delivered solution",
+      "pass": true,
+      "ms": 54
+    },
+    {
+      "test": "blocked worker command queue triggers forced cancellation",
+      "pass": true,
+      "ms": 119
+    },
+    {
+      "test": "real worker crash after incumbent preserves preview",
+      "pass": true,
+      "ms": 108
+    },
+    {
+      "test": "real worker close after incumbent preserves preview",
+      "pass": true,
+      "ms": 694
+    },
+    {
+      "test": "main independent validator rejects invalid worker data",
+      "pass": true,
+      "ms": 77
+    },
+    {
+      "test": "main independent validator rejects quality worker data",
+      "pass": true,
+      "ms": 122
+    },
+    {
+      "test": "late old-run and duplicate events cannot alter new run",
+      "pass": true,
+      "ms": 217
+    },
+    {
+      "test": "fresh A infeasibility precedes B; main inspection is not transferable proof",
+      "pass": true,
+      "ms": 35
+    },
+    {
+      "test": "both stages infeasible is distinct from timeout",
+      "pass": true,
+      "ms": 23
+    },
+    {
+      "test": "exact fractional quality and reference tie survive JSON transport",
+      "pass": true,
+      "ms": 37
+    },
+    {
+      "test": "missing worker asset fails explicitly",
+      "pass": true,
+      "ms": 13
+    }
+  ],
+  "chromium": "154.0.8037.57",
+  "observedWorkers": [
+    "http://127.0.0.1:33479/akys_v2_worker.js",
+    "http://127.0.0.1:33479/akys_v2_worker.js",
+    "http://127.0.0.1:33479/akys_v2_worker.js",
+    "http://127.0.0.1:33479/akys_v2_worker.js",
+    "http://127.0.0.1:33479/akys_v2_worker.js",
+    "http://127.0.0.1:33479/akys_v2_worker.js",
+    "http://127.0.0.1:33479/akys_v2_worker.js",
+    "http://127.0.0.1:33479/fixtures/blocked.js",
+    "http://127.0.0.1:33479/fixtures/crash.js",
+    "http://127.0.0.1:33479/fixtures/close.js",
+    "http://127.0.0.1:33479/fixtures/invalid.js",
+    "http://127.0.0.1:33479/fixtures/quality.js",
+    "http://127.0.0.1:33479/fixtures/stale.js",
+    "http://127.0.0.1:33479/fixtures/stale.js",
+    "http://127.0.0.1:33479/akys_v2_worker.js",
+    "http://127.0.0.1:33479/akys_v2_worker.js",
+    "http://127.0.0.1:33479/akys_v2_worker.js",
+    "http://127.0.0.1:33479/missing.js"
+  ],
+  "pageErrors": [],
+  "assetSha256": {
+    "acceptance.js": "631172c090f58addf651fdbc1e973c2277ab84f0a387a0d5a0cb07439f005b91",
+    "akys_v2_worker.js": "19019a84346a55dbd9446c9e5807f77d78038ea4a4590cd0a2fa70cef85459e7"
+  }
+}

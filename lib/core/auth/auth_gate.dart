@@ -59,6 +59,10 @@ class AccessDeniedScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
+              TextButton(
+                onPressed: auth.refreshAuthorization,
+                child: const Text('Yetkiyi yeniden doğrula'),
+              ),
               LogoutButton(auth: auth),
             ],
           ),

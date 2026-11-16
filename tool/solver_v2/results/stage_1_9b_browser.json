@@ -1,0 +1,25 @@
+{
+  "checks": [
+    "real-worker optimize, exact quality preview, accept, lock, reoptimize and accept",
+    "mobile 414 and desktop 1440 navigation",
+    "B preview cannot be accepted; draft retained on rejection",
+    "UI navigation during active worker, deadline extension, cooperative cancel"
+  ],
+  "errors": [],
+  "workers": [
+    "http://127.0.0.1:34127/akys_v2_worker.js",
+    "http://127.0.0.1:34127/akys_v2_worker.js",
+    "http://127.0.0.1:34127/akys_v2_worker.js",
+    "http://127.0.0.1:34127/akys_v2_worker.js"
+  ],
+  "chromium": "154.0.8037.57",
+  "firstQuality": "0, -2, 0, -2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6",
+  "cancelObservedMilliseconds": 147.35716400900856,
+  "mainThread": {
+    "beats": 35,
+    "maxGapMilliseconds": 151.2999999821186
+  },
+  "appSha256": "bc20892a0c3477107a089a6024b4f75891992234c495df06b49b5612be075351",
+  "workerSha256": "19019a84346a55dbd9446c9e5807f77d78038ea4a4590cd0a2fa70cef85459e7",
+  "pass": true
+}

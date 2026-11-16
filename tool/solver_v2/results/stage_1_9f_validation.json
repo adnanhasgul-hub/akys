@@ -1,0 +1,33 @@
+{
+  "date": "2026-11-16",
+  "baseCommit": "4f1d9caafb6d275315d6bebaa5a8612d75fe9a19",
+  "flutterTests": 277,
+  "chromiumTests": 68,
+  "workerTests": 18,
+  "rulesTests": 55,
+  "approvalGroups": 19,
+  "migrationGroups": 9,
+  "browserGroups": 8,
+  "recoveryGroups": 5,
+  "flutterAnalyze": "clean",
+  "dartAnalyze": "clean",
+  "androidDeviceTest": "unavailable: adb list empty",
+  "webBuild": "pass",
+  "androidDebugBuild": "pass",
+  "productionApproval": "disabled; real Google token/IAM integration not verified",
+  "productionTouched": false,
+  "artifacts": {
+    "build/app/outputs/flutter-apk/app-debug.apk": {
+      "bytes": 168700763,
+      "sha256": "1cb07ce948fe5eefaf7ca4c7125cb0b5717767889172c121ebae36027b9c2d12"
+    },
+    "build/web/main.dart.js": {
+      "bytes": 3553256,
+      "sha256": "6274e6c23057ca893813edfa67633ecfdf3bf3034976ffc27c1479ef4ef0d4c7"
+    },
+    "build/web/akys_recovery.js": {
+      "bytes": 2795,
+      "sha256": "a568ab94141e6d26cbbc9864d2382159265eb1223b51c7294c65b98ef89a8289"
+    }
+  }
+}

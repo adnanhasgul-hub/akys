@@ -29,7 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     try {
       await widget.auth.signIn(_email.text, _password.text);
-      _password.clear();
+      if (mounted) _password.clear();
     } on AuthFailure catch (error) {
       if (mounted) setState(() => _error = error.message);
     } catch (_) {

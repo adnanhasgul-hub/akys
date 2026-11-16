@@ -1,102 +1,67 @@
 # AKYS — A Klinik Yönetim Sistemi
 
-Tek Flutter/Dart kod tabanına sahip uygulama başlangıcıdır. Bu sürüm yalnızca
-AKYS başlığını ve iki modül kartını gösterir; kartlar henüz işlem başlatmaz.
+AKYS V2, Flutter Web ve Android için nöbet çizelgesi uygulamasıdır. Standart giriş
+`lib/main.dart`, mevcut Firebase Authentication/admin custom claim altyapısını ve
+`v2_schedules` repository'sini kullanır. Android application ID
+`com.adnanhasgul.akys`, Firebase projesi `akys-d708a` olarak korunmuştur.
 
-## Mimari kararlar
+## Mimari
 
-- Android = native-compiled Flutter. WebView kullanılmaz; web sitesi APK içine sarılmaz.
-- Android application ID: `com.adnanhasgul.akys`. APK/AAB hedeflenir.
-- Web = Flutter Web.
-- Desktop kullanımı = Web/PWA üzerinden Microsoft Edge.
-- Windows native build / `.exe` hedefi yoktur.
-- Yalnızca `android/` ve `web/` platformları oluşturulmuştur.
-- Firebase ortak backend için `akys-d708a` projesine bağlanmıştır.
-  `firebase_core`, `firebase_auth` ve uygulama başlangıcında Firebase initialization vardır.
-  Admin giriş arayüzü vardır; Firestore veri işlemleri ve Hosting deploy yoktur.
-- AKYS üst platformdur. `work_schedule` ve `operative_notes` bağımsız peer modules'dür.
-  Ameliyat Notları, Çalışma Çizelgesi'nin altında değildir.
-- Modüller birbirini import etmez. `app` modülleri bir araya getirir; `core` ortak,
-  pure Dart tanımlarını tutar. Gelecekte iş mantığı platform ve Firebase'den
-  bağımsız Dart kodunda tutulmalıdır.
+- `lib/solver_v2/`: saf Dart DFS, klinik doğrulayıcı, kesin 19 bileşenli kalite,
+  A/B protokolü, manuel düzenleme, kilitli yeniden optimizasyon ve çalışma katmanları.
+- `lib/modules/schedule_v2/`: çizelge, hekim/kısıt yönetimi, kalite paneli, taslak,
+  revizyon, cursor sayfalaması ve sürüm geçmişi.
+- `lib/core/auth/`: mevcut Firebase Auth ve admin claim doğrulaması.
+- `lib/core/design/`: ortak Clinical Teal tasarım sistemi.
+- Web: ayrı derlenen gerçek Worker. Android: Dart isolate.
 
-```text
-lib/
-├── app/                         # Uygulama shell'i ve modüllerin birleştirilmesi
-├── core/                        # Pure Dart ortak modül tanımı
-├── modules/
-│   ├── work_schedule/           # Yalnızca modül kimliği
-│   └── operative_notes/         # Yalnızca modül kimliği
-└── main.dart
-```
+V1 ekranları, motorları ve modelleri kaldırılmıştır. Eski production koleksiyonları ve
+kullanıcılar **silinmemiştir**; otomatik migration yoktur. Kalıcı klinik onay A ve B için
+kapalıdır; güvenilir sunucu doğrulaması henüz sağlanmamıştır. İstemci kalite/kanıt alanları
+onay yetkisi oluşturmaz.
 
-Nöbet, görev dağılımı, personel, algoritma ve ameliyat notu özellikleri henüz yoktur.
+## Yerel geliştirme ve doğrulama
 
-## Çalıştırma ve doğrulama
-
-Flutter 3.47.9 stable / Dart 3.13.7 ile hazırlanmıştır.
+Flutter 3.47.9 / Dart 3.13.7 / Java 21 kullanılmıştır.
 
 ```sh
 flutter pub get
 flutter analyze
 flutter test
-flutter run -d chrome
-flutter build web
+flutter build web --release
+bash tool/solver_v2/web/build_worker.sh build/web
 flutter build apk --debug
 ```
 
-AKYS bulut ortamında önce `source /workspace/akys-toolchain/activate.sh` çalıştırılır.
-Java/Gradle, HTTP proxy ortam değişkenlerini otomatik kullanmadığından bu ortamda
-Android build öncesi aşağıdaki ayar gerekir (repository yapılandırmasına gömülmez):
+Varsayılan uygulama gerçek Firebase yapılandırmasını kullanır. Test için production
+uygulamasını başlatmayın; açıkça izole demo emülatörünü seçin:
 
 ```sh
-export GRADLE_OPTS='-Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080'
+bash tool/solver_v2/start_v2_emulators.sh
+bash tool/solver_v2/build_v2_firebase_web.sh
 ```
 
-Android için Java ve Android SDK gerekir. Ağ erişimi engellenirse güvenlik,
-TLS veya dependency doğrulaması kapatılmamalı; engellenen host için ortam ağ izni
-sağlanmalıdır. Release APK/AAB için daha sonra özel release signing yapılandırılmalıdır;
-şablondaki debug signing üretim dağıtımı için kullanılmamalıdır.
+İkinci komut `main.dart`ı demo backend ile `build/v2-firebase` altına derler ve Auth
+emülatörünü oturum geri yüklenmeden önce bağlayan yerel Web başlatıcısını paketler.
+Bu başlatıcı production `build/web` içine eklenmez. Emulator test kullanıcıları için
+`tool/solver_v2/web/seed_auth_emulator.cjs` kullanılabilir; yalnız loopback/demo backend'e
+bağlanır. Android emülatörü için `--dart-define=AKYS_V2_EMULATOR_HOST=10.0.2.2` kullanılır.
+`lib/main_v2.dart` yalnız offline kabul/test amaçlı giriş olarak korunmuştur.
 
-## Web / Edge kurulumu
+Auth/Firestore emülatör testleri için `tool/firestore-tests` bağımlılıklarını kurup
+`npm test --prefix tool/firestore-tests` çalıştırın. Gerçek Worker ve Flutter tarayıcı
+kabul araçları `tool/solver_v2/web` altındadır. Native VM runtime testlerini doğrudan
+Chromium paket-test sunucusunda çalıştırmayın; gerçek Worker için derlenmiş asset sunan
+ayrı kabul harness'i gerekir.
 
-Manifest AKYS adını, Türkçe dili, 192/512 piksel ikonları ve `standalone` görünümünü
-tanımlar. `flutter build web` çıktısı `build/web/` altındadır. Üretimde HTTPS ile
-sunulmalıdır (yerel denemede localhost kullanılabilir). Edge'de siteyi açıp
-uygulama yükleme menüsünden kurulum yapılabilir. Gerçek Edge kurulumu ve yayın
-ortamı bu aşamada doğrulanmamıştır. Çevrimdışı kullanım garantisi yoktur;
-çevrimdışı veri/senkronizasyon gelecekte ayrıca tasarlanmalıdır.
+## Yayın ve güvenlik sınırı
 
-## Firebase yapılandırması
+Bu geliştirme branch'inden push/merge/deploy yapılmamıştır. Gelecek production geçişinde
+önce test edilmiş V2 Rules ayrıca incelenip uygulanmalıdır. Hosting workflow'u, aktif
+Rules'ın test edilen kaynakla aynı olduğunu doğrulamadan V2 istemcisini yayımlamaz.
+Başlangıç verilerini veya kullanıcıları otomatik silen/taşıyan işlem yoktur.
+Android debug APK derlemesi fiziksel cihaz testi veya release signing yerine geçmez.
 
-Resmi FlutterFire CLI 1.4.1 ile yalnızca Android ve Web için yapılandırılmıştır.
-Android package: `com.adnanhasgul.akys`. Var olan AKYS Web uygulaması kullanılmıştır.
-Web plugin kayıt kodunun gerektirdiği `flutter_web_plugins` Flutter SDK bağımlılığı
-açıkça eklenmiştir.
-`lib/firebase_options.dart`, `android/app/google-services.json`, `firebase.json`
-ve Google Services Gradle plugin ayarları FlutterFire tarafından üretilmiştir.
-`firebase.json` yalnızca FlutterFire uygulama eşleştirmelerini içerir; Hosting
-ve Firestore deploy ayarı eklenmemiştir.
-
-`main.dart`, Flutter binding hazırlandıktan sonra
-`Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform)`
-çağrısını bekler ve shell'i başlatır. Modüller ve pure Dart core Firebase'e bağımlı değildir.
-
-Yeniden yapılandırma gerektiğinde proje erişimi olan Firebase CLI oturumuyla:
-
-```sh
-dart pub global activate flutterfire_cli
-flutterfire configure --project=akys-d708a --platforms=android,web --android-package-name=com.adnanhasgul.akys
-```
-
-Firebase client configuration dosyaları istemci uygulamasına aittir; servis hesabı
-anahtarı değildir. Service account/private key ve Firebase CLI oturum credential'ları
-repository'ye eklenmemelidir. Veri erişim yetkileri gelecekte backend security rules
-ile yönetilmelidir; bu entegrasyon rules veya veri değiştirmez.
-
-## Admin girişi
-
-Email/Password girişi ve signed `admin: true` custom claim yetkilendirmesi için
-[admin kurulum ve güvenlik notları](docs/ADMIN_AUTH.md) belgesine bakın.
-Canlı Email/Password provider ve admin-only Firestore rules doğrulanmıştır.
-Gerçek admin hesabı ve trusted Admin SDK ile claim ataması henüz beklemektedir.
+- [Geçiş ve güvenlik planı](tool/solver_v2/MIGRATION_1_9D.md)
+- [Testler, performans ve sınırlamalar](tool/solver_v2/VALIDATION_1_9D.md)
+- [Ölçüm çıktıları](tool/solver_v2/results/)

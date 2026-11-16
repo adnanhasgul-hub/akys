@@ -1,0 +1,53 @@
+{
+  "chromium": "154.0.8037.57",
+  "optimalObserved": true,
+  "workers": [
+    "http://127.0.0.1:42035/akys_v2_worker.js",
+    "http://127.0.0.1:42035/akys_v2_worker.js"
+  ],
+  "frameMetrics": {
+    "frames": 77,
+    "ticks": 80,
+    "taps": 1,
+    "nodes": 136492
+  },
+  "errors": [],
+  "console": [
+    "Injecting <script> tag. Using callback.",
+    "AKYS_SMOKE:preparing:none:",
+    "[.WebGL-0x394001bb400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "AKYS_SMOKE:running:none:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:optimal:optimalProven:",
+    "AKYS_SMOKE_BACKGROUND_START",
+    "AKYS_SMOKE:preparing:none:",
+    "[.WebGL-0x394001bb400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[.WebGL-0x394001bb400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[.WebGL-0x394001bb400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+    "AKYS_SMOKE:running:none:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE_TAP:nodes=5481",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:feasible:feasibleUnproven:",
+    "AKYS_SMOKE:timedOut:feasibleUnproven:",
+    "AKYS_SMOKE_BACKGROUND:frames=77;ticks=80;taps=1;nodes=136492",
+    "AKYS_SMOKE:cancelled:feasibleUnproven:"
+  ],
+  "workerSha256": "19019a84346a55dbd9446c9e5807f77d78038ea4a4590cd0a2fa70cef85459e7",
+  "appSha256": "f39279ffa26ce7ed9710868c6147d28fb4cbe71f7ab84a66539fc2216973046e"
+}
