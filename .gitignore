@@ -49,3 +49,7 @@ app.*.map.json
 
 # Local Firestore security test dependencies
 tool/firestore-tests/node_modules/
+
+# Ephemeral GitHub OIDC credentials and private production inspection output
+gha-creds-*.json
+/production-inspection/
