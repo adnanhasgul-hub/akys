@@ -11,7 +11,9 @@ void main() {
   final long = Uri.base.queryParameters['fixture'] == 'long';
   final transition = Uri.base.queryParameters['fixture'] == 'transition';
   final p = long
-      ? resilienceProblem('6-open')
+      ? resilienceProblem(
+          Uri.base.queryParameters['size'] == '20' ? '20-open' : '6-open',
+        )
       : Problem(
           doctors: [
             Doctor(

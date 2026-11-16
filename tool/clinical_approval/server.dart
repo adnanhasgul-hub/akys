@@ -7,6 +7,17 @@ import 'dart:io';
 import 'approval.dart';
 import 'token_verifier.dart';
 
+import 'package:crypto/crypto.dart';
+
+Object? _canonical(Object? value) {
+  if (value is Map) {
+    final keys = value.keys.cast<String>().toList()..sort();
+    return {for (final key in keys) key: _canonical(value[key])};
+  }
+  if (value is List) return value.map(_canonical).toList();
+  return value;
+}
+
 class EmulatorApprovalStore {
   EmulatorApprovalStore(this.port);
   final int port;
@@ -29,7 +40,12 @@ class EmulatorApprovalStore {
         throw TimeoutException('Approval store deadline');
       },
     );
-    final value = jsonDecode(await utf8.decoder.bind(response).join());
+    final value = jsonDecode(
+      await utf8.decoder
+          .bind(response)
+          .join()
+          .timeout(const Duration(seconds: 5)),
+    );
     if (response.statusCode >= 400) {
       throw const ApprovalRejected('STORE_CONFLICT_OR_UNAVAILABLE');
     }
@@ -71,7 +87,23 @@ class EmulatorApprovalStore {
       if (headFields['version']['integerValue'] != '$version') {
         throw const ApprovalRejected('VERSION_CONFLICT');
       }
+      final versionMetadata = Map<String, dynamic>.of(fields)
+        ..remove('payload')
+        ..remove('historySchema');
+      final comparableHead = Map<String, dynamic>.of(headFields)
+        ..remove('historySchema');
+      if (fields['payload']?['stringValue'] is! String ||
+          jsonEncode(_canonical(versionMetadata)) !=
+              jsonEncode(_canonical(comparableHead))) {
+        throw const ApprovalRejected('SNAPSHOT_MISMATCH');
+      }
+      final digest = sha256
+          .convert(utf8.encode(fields['payload']['stringValue'] as String))
+          .toString();
       if (headFields['status']['stringValue'] == 'approved') {
+        if (headFields['snapshotSha256']?['stringValue'] != digest) {
+          throw const ApprovalRejected('SNAPSHOT_MISMATCH');
+        }
         if (headFields['approvalOperation']?['stringValue'] != operation ||
             headFields['approvedBy']?['stringValue'] != actor) {
           throw const ApprovalRejected('ALREADY_APPROVED');
@@ -100,6 +132,7 @@ class EmulatorApprovalStore {
         throw const ApprovalRejected('SNAPSHOT_MISMATCH');
       }
       final approval = {
+        'snapshotSha256': {'stringValue': digest},
         'status': {'stringValue': 'approved'},
         'approvedBy': {'stringValue': actor},
         'approvalOperation': {'stringValue': operation},
@@ -129,6 +162,7 @@ class EmulatorApprovalStore {
         'update': {
           'name': eventName,
           'fields': {
+            'snapshotSha256': {'stringValue': digest},
             'action': {'stringValue': 'approvalSucceeded'},
             'actor': {'stringValue': actor},
             'version': {'integerValue': '$version'},
@@ -198,7 +232,7 @@ Future<void> main(List<String> args) async {
         final actor = await verifier.admin(bearer.substring(7));
         var size = 0;
         final bytes = <int>[];
-        await for (final chunk in request) {
+        await for (final chunk in request.timeout(const Duration(seconds: 5))) {
           size += chunk.length;
           if (size > 4096) throw const ApprovalRejected('TOO_LARGE');
           bytes.addAll(chunk);

@@ -1,8 +1,9 @@
 """Loopback only. Ephemeral signed test issuer; never trusts unsigned emulator JWTs."""
-import base64,json,os,subprocess,tempfile,time,urllib.request,urllib.error,concurrent.futures,socket
+import base64,json,os,subprocess,tempfile,time,urllib.request,urllib.error,concurrent.futures,socket,argparse
 from pathlib import Path
 assert os.environ.get('FIRESTORE_EMULATOR_HOST') in ('127.0.0.1:8080','localhost:8080')
 root='http://127.0.0.1:8080/v1/projects/demo-akys/databases/(default)/documents'
+parser=argparse.ArgumentParser();parser.add_argument('--result',default='tool/solver_v2/results/stage_1_9f_server.json');args=parser.parse_args()
 results={'checks':[]}
 def http(url,data=None,token='owner',method='POST'):
  req=urllib.request.Request(url,None if data is None else json.dumps(data).encode(),{'Authorization':'Bearer '+token,'Content-Type':'application/json'},method=method)
@@ -36,11 +37,12 @@ with tempfile.TemporaryDirectory(prefix='akys-approval-') as temp:
   for claims in [dict(admin=False),dict(admin='true'),dict(exp=0),dict(aud='wrong'),dict(iss='wrong'),dict(iat=int(time.time())+10000)]:
    assert approve('valid',token(**claims))[0]==403
   results['checks'].append('signed non-admin, string admin, expired, wrong audience/issuer/future token rejected')
+  assert approve('valid','')[0]==403;results['checks'].append('missing token rejected')
   assert approve('valid','fake')[0]==403;results['checks'].append('unsigned/fake token rejected')
   tampered=good.split('.');body=json.loads(base64.urlsafe_b64decode(tampered[1]+'=='));body['sub']='other';tampered[1]=b64(json.dumps(body).encode())
   assert approve('valid','.'.join(tampered))[0]==403;results['checks'].append('tampered signed claims rejected')
   assert approve('valid',proof=True)[0]==409;results['checks'].append('client proof field rejected')
-  for kind in ['missing','transition','proof']:
+  for kind in ['missing','transition','proof','hard-constraint']:
    seed(kind,fixtures[kind]);assert approve(kind)[0]==409
    status,head=http(root+'/v2_schedules/'+kind,method='GET');assert head['fields']['status']['stringValue']=='draft'
    results['checks'].append(kind+' rejected without writes')
@@ -58,7 +60,31 @@ with tempfile.TemporaryDirectory(prefix='akys-approval-') as temp:
   assert len(events.get('documents',[]))==1;results['checks'].append('concurrent transaction: single approval audit')
   approved=http(root+'/v2_schedules/valid/versions/1',method='GET')[1]['fields'];assert approved['status']['stringValue']=='approved'
   assert 'optimalityProven' not in approved;results['checks'].append('approved revision has no optimum claim')
+  seed('two-admins',fixtures['valid'])
+  with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+   responses=list(pool.map(lambda auth:approve('two-admins',auth),[good,token(sub='second-admin')]))
+  assert sum(s==200 for s,_ in responses)==1,responses
+  events=http(root+'/v2_schedules/two-admins/server_audit',method='GET')[1]
+  assert len(events.get('documents',[]))==1
+  results['checks'].append('two distinct admins: exactly one immutable approval')
+  seed('tampered',fixtures['valid'])
+  http(root+'/v2_schedules/tampered/versions/1?updateMask.fieldPaths=month',{'fields':{'month':encoded(12)}},method='PATCH')
+  assert approve('tampered')[0]==409
+  seed('missing-link',fixtures['valid'])
+  http(root+'/v2_schedules/missing-link/versions/1?updateMask.fieldPaths=operationId',{'fields':{}},method='PATCH')
+  assert approve('missing-link')[0]==409
+  results['checks'].append('modified version metadata and missing snapshot link rejected')
+  seed('transaction-fault',fixtures['valid'])
+  http(root+'/v2_schedules/transaction-fault/server_audit/test_approval_operation_0001',{'fields':{'action':encoded('existing')}},method='PATCH')
+  assert approve('transaction-fault')[0]==409
+  for suffix in ['', '/versions/1']:
+   assert http(root+'/v2_schedules/transaction-fault'+suffix,method='GET')[1]['fields']['status']['stringValue']=='draft'
+  results['checks'].append('commit precondition failure leaves head/version unapproved')
+  # A trusted-store corruption must not be accepted as an idempotent retry.
+  http(root+'/v2_schedules/valid/versions/1?updateMask.fieldPaths=payload',{'fields':{'payload':encoded(fixtures['transition'])}},method='PATCH')
+  assert approve('valid')[0]==409
+  results['checks'].append('changed approved snapshot rejected on retry by digest')
   results['pass']=True
  finally:
   service.terminate();service.wait(timeout=10);print(service.stderr.read())
-Path('tool/solver_v2/results/stage_1_9e_server.json').write_text(json.dumps(results,indent=2)+'\n');print(json.dumps(results))
+Path(args.result).write_text(json.dumps(results,indent=2)+'\n');print(json.dumps(results))

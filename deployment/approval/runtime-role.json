@@ -1,0 +1,11 @@
+{
+  "title": "AKYS V2 approval runtime (proposal)",
+  "description": "Point-read trusted snapshots and atomically create/update approval metadata. No delete, export, index, Auth, IAM or role administration.",
+  "stage": "GA",
+  "includedPermissions": [
+    "datastore.databases.get",
+    "datastore.entities.get",
+    "datastore.entities.create",
+    "datastore.entities.update"
+  ]
+}

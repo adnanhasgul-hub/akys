@@ -33,5 +33,15 @@ void main() {
     ...jsonDecode(data['valid']!) as Map,
     'proved': true,
   });
+  final constrained = Map<String, dynamic>.from(
+    jsonDecode(jsonEncode(p.toMessage())) as Map,
+  );
+  (constrained['doctors'] as List).first['unavailable'] = [0];
+  data['hard-constraint'] = DraftSnapshot(
+    Problem.fromMessage(constrained),
+    {'s': 'Synthetic S', 'j': 'Synthetic J'},
+    [0],
+    {},
+  ).encode();
   stdout.writeln(jsonEncode(data));
 }

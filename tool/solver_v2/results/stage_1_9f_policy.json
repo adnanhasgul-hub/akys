@@ -1,0 +1,5 @@
+{
+  "pass": true,
+  "checks": 5,
+  "scope": "local proposal/static guards only; no IAM binding or cloud resource tested"
+}

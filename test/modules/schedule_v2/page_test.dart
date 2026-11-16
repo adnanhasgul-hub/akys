@@ -6,6 +6,32 @@ import 'package:akys/modules/schedule_v2/workspace.dart';
 import 'package:akys/solver_v2/solver.dart';
 
 void main() {
+  testWidgets('month retains all days and reaches last slot by scrolling', (
+    t,
+  ) async {
+    final w = ScheduleWorkspace(
+      initial: ScheduleWorkspace.emptyMonth(2026, 12),
+    );
+    addTearDown(w.dispose);
+    await t.pumpWidget(
+      MaterialApp(
+        theme: ClinicalTealTheme.light,
+        home: V2SchedulePage(workspace: w),
+      ),
+    );
+    await t.pumpAndSettle();
+    expect(find.byKey(const Key('slot-0')), findsOneWidget);
+    await t.scrollUntilVisible(
+      find.byKey(const Key('slot-60')),
+      500,
+      scrollable: find.byType(Scrollable).first,
+      maxScrolls: 40,
+    );
+    expect(find.byKey(const Key('slot-60')), findsOneWidget);
+    expect(w.editor.current.assignments.length, 62);
+    expect(t.takeException(), isNull);
+  });
+
   for (final width in [360.0, 414.0, 768.0, 1440.0]) {
     testWidgets('responsive width $width and 200 percent text', (t) async {
       await t.binding.setSurfaceSize(Size(width, 1000));

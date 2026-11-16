@@ -1,0 +1,380 @@
+{
+  "rows": [
+    {
+      "width": 414,
+      "repeat": 0,
+      "fixture": "20-open",
+      "days": 31,
+      "frameIntervalsMs": {
+        "n": 176,
+        "mean": 25.85113636363636,
+        "p95": 50,
+        "max": 249.89999999999964
+      },
+      "longTasksMs": {
+        "n": 10,
+        "mean": 112.4,
+        "p95": 256,
+        "max": 256
+      },
+      "tabClickObservedMsIncluding100msWait": {
+        "n": 4,
+        "mean": 450.2233702369267,
+        "p95": 600.5573869915679,
+        "max": 600.5573869915679
+      },
+      "timelineEvents": {
+        "FunctionCall": {
+          "n": 802,
+          "mean": 4.859917705735661,
+          "p95": 18.09,
+          "max": 227.365
+        },
+        "Layout": {
+          "n": 61,
+          "mean": 0.5319016393442623,
+          "p95": 2.193,
+          "max": 4.208
+        },
+        "Paint": {
+          "n": 96,
+          "mean": 0.13180208333333332,
+          "p95": 0.325,
+          "max": 0.701
+        },
+        "UpdateLayoutTree": {
+          "n": 88,
+          "mean": 0.43665909090909094,
+          "p95": 1.582,
+          "max": 4.15
+        },
+        "V8.GCScavenger": {
+          "n": 6,
+          "mean": 4.6545,
+          "p95": 5.812,
+          "max": 5.812
+        },
+        "V8.GCCompactor": {
+          "n": 0,
+          "mean": null,
+          "p95": null,
+          "max": null
+        }
+      }
+    },
+    {
+      "width": 414,
+      "repeat": 1,
+      "fixture": "20-open",
+      "days": 31,
+      "frameIntervalsMs": {
+        "n": 198,
+        "mean": 20.621717171717172,
+        "p95": 33.399999999999636,
+        "max": 183.30000000000018
+      },
+      "longTasksMs": {
+        "n": 7,
+        "mean": 105.28571428571429,
+        "p95": 182,
+        "max": 182
+      },
+      "tabClickObservedMsIncluding100msWait": {
+        "n": 4,
+        "mean": 391.9102432701038,
+        "p95": 465.6174789997749,
+        "max": 465.6174789997749
+      },
+      "timelineEvents": {
+        "FunctionCall": {
+          "n": 888,
+          "mean": 3.714994369369369,
+          "p95": 12.511,
+          "max": 160.416
+        },
+        "Layout": {
+          "n": 60,
+          "mean": 0.5074833333333333,
+          "p95": 1.236,
+          "max": 3.947
+        },
+        "Paint": {
+          "n": 95,
+          "mean": 0.10370526315789473,
+          "p95": 0.29,
+          "max": 0.389
+        },
+        "UpdateLayoutTree": {
+          "n": 87,
+          "mean": 0.25550574712643676,
+          "p95": 0.932,
+          "max": 1.684
+        },
+        "V8.GCScavenger": {
+          "n": 7,
+          "mean": 4.629428571428571,
+          "p95": 7.921,
+          "max": 7.921
+        },
+        "V8.GCCompactor": {
+          "n": 0,
+          "mean": null,
+          "p95": null,
+          "max": null
+        }
+      }
+    },
+    {
+      "width": 414,
+      "repeat": 2,
+      "fixture": "20-open",
+      "days": 31,
+      "frameIntervalsMs": {
+        "n": 191,
+        "mean": 20.505235602094242,
+        "p95": 33.399999999999636,
+        "max": 150
+      },
+      "longTasksMs": {
+        "n": 7,
+        "mean": 99.14285714285714,
+        "p95": 152,
+        "max": 152
+      },
+      "tabClickObservedMsIncluding100msWait": {
+        "n": 4,
+        "mean": 344.3714907480171,
+        "p95": 462.49897801317275,
+        "max": 462.49897801317275
+      },
+      "timelineEvents": {
+        "FunctionCall": {
+          "n": 845,
+          "mean": 3.624519526627219,
+          "p95": 12.822,
+          "max": 139.144
+        },
+        "Layout": {
+          "n": 58,
+          "mean": 0.3993448275862069,
+          "p95": 1.341,
+          "max": 1.797
+        },
+        "Paint": {
+          "n": 92,
+          "mean": 0.0905108695652174,
+          "p95": 0.212,
+          "max": 0.309
+        },
+        "UpdateLayoutTree": {
+          "n": 85,
+          "mean": 0.22968235294117648,
+          "p95": 0.388,
+          "max": 1.733
+        },
+        "V8.GCScavenger": {
+          "n": 7,
+          "mean": 3.7641428571428572,
+          "p95": 5.44,
+          "max": 5.44
+        },
+        "V8.GCCompactor": {
+          "n": 0,
+          "mean": null,
+          "p95": null,
+          "max": null
+        }
+      }
+    },
+    {
+      "width": 1440,
+      "repeat": 0,
+      "fixture": "20-open",
+      "days": 31,
+      "frameIntervalsMs": {
+        "n": 139,
+        "mean": 33.93093525179856,
+        "p95": 83.20000000000027,
+        "max": 316.5999999999999
+      },
+      "longTasksMs": {
+        "n": 10,
+        "mean": 142.7,
+        "p95": 320,
+        "max": 320
+      },
+      "tabClickObservedMsIncluding100msWait": {
+        "n": 4,
+        "mean": 514.8623399873031,
+        "p95": 718.064198968932,
+        "max": 718.064198968932
+      },
+      "timelineEvents": {
+        "FunctionCall": {
+          "n": 563,
+          "mean": 6.682946714031972,
+          "p95": 30.51,
+          "max": 267.526
+        },
+        "Layout": {
+          "n": 54,
+          "mean": 0.5464814814814815,
+          "p95": 1.699,
+          "max": 4.282
+        },
+        "Paint": {
+          "n": 73,
+          "mean": 0.1096986301369863,
+          "p95": 0.244,
+          "max": 0.52
+        },
+        "UpdateLayoutTree": {
+          "n": 83,
+          "mean": 0.33713253012048194,
+          "p95": 0.886,
+          "max": 6.279
+        },
+        "V8.GCScavenger": {
+          "n": 4,
+          "mean": 11.046000000000001,
+          "p95": 13.755,
+          "max": 13.755
+        },
+        "V8.GCCompactor": {
+          "n": 0,
+          "mean": null,
+          "p95": null,
+          "max": null
+        }
+      }
+    },
+    {
+      "width": 1440,
+      "repeat": 1,
+      "fixture": "20-open",
+      "days": 31,
+      "frameIntervalsMs": {
+        "n": 160,
+        "mean": 29.478125,
+        "p95": 50.09999999999991,
+        "max": 250
+      },
+      "longTasksMs": {
+        "n": 8,
+        "mean": 137.75,
+        "p95": 263,
+        "max": 263
+      },
+      "tabClickObservedMsIncluding100msWait": {
+        "n": 4,
+        "mean": 508.552296741982,
+        "p95": 719.4893279811367,
+        "max": 719.4893279811367
+      },
+      "timelineEvents": {
+        "FunctionCall": {
+          "n": 608,
+          "mean": 5.89509375,
+          "p95": 27.762,
+          "max": 237.524
+        },
+        "Layout": {
+          "n": 51,
+          "mean": 0.4460588235294118,
+          "p95": 1.17,
+          "max": 2.237
+        },
+        "Paint": {
+          "n": 67,
+          "mean": 0.13361194029850745,
+          "p95": 0.701,
+          "max": 0.739
+        },
+        "UpdateLayoutTree": {
+          "n": 79,
+          "mean": 0.23806329113924052,
+          "p95": 0.768,
+          "max": 1.078
+        },
+        "V8.GCScavenger": {
+          "n": 4,
+          "mean": 8.026250000000001,
+          "p95": 8.832,
+          "max": 8.832
+        },
+        "V8.GCCompactor": {
+          "n": 0,
+          "mean": null,
+          "p95": null,
+          "max": null
+        }
+      }
+    },
+    {
+      "width": 1440,
+      "repeat": 2,
+      "fixture": "20-open",
+      "days": 31,
+      "frameIntervalsMs": {
+        "n": 161,
+        "mean": 29.08757763975155,
+        "p95": 50,
+        "max": 233.29999999999973
+      },
+      "longTasksMs": {
+        "n": 8,
+        "mean": 129.75,
+        "p95": 241,
+        "max": 241
+      },
+      "tabClickObservedMsIncluding100msWait": {
+        "n": 4,
+        "mean": 505.5847652547527,
+        "p95": 705.169296998065,
+        "max": 705.169296998065
+      },
+      "timelineEvents": {
+        "FunctionCall": {
+          "n": 608,
+          "mean": 5.767421052631579,
+          "p95": 27.961,
+          "max": 211.923
+        },
+        "Layout": {
+          "n": 51,
+          "mean": 0.4236078431372549,
+          "p95": 1.117,
+          "max": 1.774
+        },
+        "Paint": {
+          "n": 70,
+          "mean": 0.12554285714285715,
+          "p95": 0.389,
+          "max": 0.505
+        },
+        "UpdateLayoutTree": {
+          "n": 79,
+          "mean": 0.2630126582278481,
+          "p95": 0.914,
+          "max": 4.124
+        },
+        "V8.GCScavenger": {
+          "n": 6,
+          "mean": 6.869666666666666,
+          "p95": 9.541,
+          "max": 9.541
+        },
+        "V8.GCCompactor": {
+          "n": 0,
+          "mean": null,
+          "p95": null,
+          "max": null
+        }
+      }
+    }
+  ],
+  "errors": [],
+  "method": "release Flutter; Chromium CDP timeline + requestAnimationFrame; no warmup samples; no production",
+  "chromium": "154.0.8037.57",
+  "pass": true
+}

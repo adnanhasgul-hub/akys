@@ -5,7 +5,7 @@ import 'dart:io';
 
 import 'server.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   final stub = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   var commits = 0;
   final pending = <HttpResponse>[];
@@ -48,7 +48,10 @@ Future<void> main() async {
     'commitRequests': commits,
     'elapsedMs': clock.elapsedMilliseconds,
   };
-  File('tool/solver_v2/results/stage_1_9e_approval_timeout.json')
-      .writeAsStringSync('${jsonEncode(result)}\n');
+  File(
+    args.isEmpty
+        ? 'tool/solver_v2/results/stage_1_9e_approval_timeout.json'
+        : args.single,
+  ).writeAsStringSync('${jsonEncode(result)}\n');
   stdout.writeln(jsonEncode(result));
 }
