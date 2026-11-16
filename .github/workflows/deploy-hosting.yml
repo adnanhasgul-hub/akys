@@ -1,0 +1,89 @@
+name: Deploy AKYS to Firebase Hosting
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        required: true
+        options: [inspect, publish]
+      expected_sha:
+        type: string
+        required: true
+        description: Exact reviewed feature commit
+      previous_rules_sha256:
+        type: string
+        required: false
+        description: Reviewed active Rules digest; required to publish
+permissions:
+  contents: read
+concurrency:
+  group: akys-production-change
+  cancel-in-progress: false
+jobs:
+  build-and-deploy:
+    if: github.repository == 'adnanhasgul-hub/akys' && github.ref == 'refs/heads/feature/akys-v2-solver-core'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Validate reviewed revision
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: test "$EXPECTED_SHA" = "$GITHUB_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --prefix tool/firestore-tests --no-audit --no-fund
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        if: inputs.mode == 'publish'
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        if: inputs.mode == 'publish'
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+      - if: inputs.mode == 'publish'
+        run: npm test --prefix tool/firestore-tests
+      - if: inputs.mode == 'publish'
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+          flutter build web --release -t lib/main.dart
+          bash tool/solver_v2/web/build_worker.sh build/web
+          test -s build/web/akys_v2_worker.js
+      - name: Authenticate using existing Actions secret only
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_AKYS }}
+      - name: Capture active configuration before any write
+        env:
+          NODE_PATH: tool/firestore-tests/node_modules
+        run: node tool/deployment/inspect.cjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: production-backup-${{ github.run_id }}
+          path: production-inspection/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Verify reviewed Rules and rollback source
+        if: inputs.mode == 'publish'
+        env:
+          EXPECTED_RULES: ${{ inputs.previous_rules_sha256 }}
+        run: python3 tool/deployment/check_live_rules.py
+      - name: Publish tested V2 Rules only
+        if: inputs.mode == 'publish'
+        run: tool/firestore-tests/node_modules/.bin/firebase deploy --only firestore:rules --project akys-d708a --non-interactive
+      - name: Verify active Rules before Hosting
+        if: inputs.mode == 'publish'
+        env:
+          NODE_PATH: tool/firestore-tests/node_modules
+        run: node tool/firestore-tests/verify-production-rules.cjs
+      - name: Publish Hosting only
+        if: inputs.mode == 'publish'
+        run: tool/firestore-tests/node_modules/.bin/firebase deploy --only hosting --project akys-d708a --non-interactive

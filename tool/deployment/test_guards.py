@@ -25,12 +25,16 @@ class DeploymentGuards(unittest.TestCase):
             with self.subTest(key=key):
                 r=copy.copy(self.run);r[key]='wrong'
                 with self.assertRaises(ValueError):validate_inspection(r,self.sha)
-    def test_no_legacy_credentials_or_automatic_deploy(self):
+    def test_existing_secret_only_in_explicit_manual_hosting(self):
         for p in Path('.github/workflows').glob('*.yml'):
             text=p.read_text()
-            self.assertNotIn('credentials_json',text);self.assertNotIn('FIREBASE_TOKEN',text)
+            if p.name != 'deploy-hosting.yml': self.assertNotIn('credentials_json',text)
+            else:
+                self.assertIn('secrets.FIREBASE_SERVICE_ACCOUNT_AKYS',text)
+                self.assertIn("refs/heads/feature/akys-v2-solver-core",text)
+            self.assertNotIn('FIREBASE_TOKEN',text)
             self.assertNotIn('  push:',text);self.assertNotIn('pull_request',text)
-        self.assertFalse(Path('.github/workflows/deploy-hosting.yml').exists())
+        self.assertTrue(Path('.github/workflows/deploy-hosting.yml').exists())
         self.assertFalse(Path('.github/workflows/deploy-firestore-rules.yml').exists())
     def test_iam_has_no_entity_auth_delete_or_admin(self):
         roles=json.loads(Path('deployment/oidc/iam-proposals.json').read_text())['roles']
