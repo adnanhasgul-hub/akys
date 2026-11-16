@@ -73,6 +73,32 @@ class _PersistencePanelState extends State<PersistencePanel> {
             : '${s.record!.status} • ${s.record!.updatedAt ?? "Sunucu zamanı bekleniyor"}',
       ),
       children: [
+        if (s.recoveryCandidate != null)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Şifreli yerel taslak kurtarılabilir'),
+              const Text(
+                'Kurtarmadan önce sunucudaki sürüm kontrol edilir. Çakışma varsa kurtarma durdurulur.',
+              ),
+              Wrap(
+                children: [
+                  TextButton(
+                    onPressed: () => perform(s.recover),
+                    child: const Text('Kurtar'),
+                  ),
+                  TextButton(
+                    onPressed: () => perform(s.discardRecovery),
+                    child: const Text('Yerel kopyayı sil'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        if (s.recoveryError != null) ...[
+          Text(s.recoveryError!),
+          TextButton(onPressed: () => perform(s.discardRecovery), child: const Text('Okunamayan yerel kopyayı sil')),
+        ],
         Wrap(
           spacing: 8,
           runSpacing: 8,

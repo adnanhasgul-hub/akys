@@ -5,6 +5,7 @@ const {doc,getDoc,getDocs,collection,writeBatch,serverTimestamp,updateDoc,delete
 (async()=>{
  if(!process.env.FIRESTORE_EMULATOR_HOST)throw Error('Emulator required');
  const env=await initializeTestEnvironment({projectId:'demo-akys',firestore:{rules:fs.readFileSync('firestore.rules','utf8')}});
+ await env.clearFirestore();
  let checks=0;
  const ok=async p=>{await assertSucceeds(p);checks++},no=async p=>{await assertFails(p);checks++};
  const admin=env.authenticatedContext('admin',{admin:true}).firestore();
@@ -59,6 +60,16 @@ const {doc,getDoc,getDocs,collection,writeBatch,serverTimestamp,updateDoc,delete
   assert.deepEqual(paged,all);checks++;
   const versions=await getDocs(query(collection(admin,'v2_schedules/a/versions'),orderBy('version','desc'),orderBy(documentId(),'desc'),limit(2)));
   assert.deepEqual(versions.docs.map(d=>d.data().version),[3,2]);checks++;
+  // Metadata is an atomic mirror, never a caller-controlled index of approvals.
+  const indexed=data(1,'draft',{historySchema:2});
+  const indexedBatch=(omit=false,tamper=false)=>{const b=writeBatch(admin);b.set(doc(admin,'v2_schedules/indexed'),indexed);b.set(doc(admin,'v2_schedules/indexed/versions/1'),{...indexed,payload:'{}'});b.set(doc(admin,'v2_schedules/indexed/events/'+indexed.operationId),{action:'draftCreated',actor:'admin',at:serverTimestamp(),version:1,operationId:indexed.operationId});if(!omit)b.set(doc(admin,'v2_schedules/indexed/version_metadata/1'),{...indexed,...(tamper?{status:'approved'}:{})});return b.commit();};
+  await no(indexedBatch(true)); await no(indexedBatch(false,true)); await ok(indexedBatch());
+  const metadata=await getDocs(collection(admin,'v2_schedules/indexed/version_metadata'));
+  assert.equal(metadata.size,1);assert.equal('payload' in metadata.docs[0].data(),false);checks++;
+  await no(updateDoc(doc(admin,'v2_schedules/indexed/version_metadata/1'),{status:'approved'}));
+  await no(deleteDoc(doc(admin,'v2_schedules/indexed/version_metadata/1')));
+  await no(getDocs(collection(env.unauthenticatedContext().firestore(),'v2_schedules/indexed/version_metadata')));
+  await no(writeBatch(admin).set(doc(admin,'v2_schedules/indexed/server_audit/forged'),{action:'approvalSucceeded'}).commit());
   console.log(JSON.stringify({v2RulesChecks:checks,pass:true}));
  } finally{await env.cleanup();}
 })().catch(e=>{console.error(e);process.exitCode=1});

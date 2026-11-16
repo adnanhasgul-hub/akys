@@ -1,0 +1,27 @@
+{
+  "checks": [
+    "real-worker optimize, exact quality preview, accept, lock, reoptimize and accept",
+    "mobile 414 and desktop 1440 navigation",
+    "B preview cannot be accepted; draft retained on rejection",
+    "UI navigation during active worker, deadline extension, cooperative cancel",
+    "30-day table scroll down/up remains interactive; measurement includes 500ms deliberate waits"
+  ],
+  "errors": [],
+  "workers": [
+    "http://127.0.0.1:40057/akys_v2_worker.js",
+    "http://127.0.0.1:40057/akys_v2_worker.js",
+    "http://127.0.0.1:40057/akys_v2_worker.js",
+    "http://127.0.0.1:40057/akys_v2_worker.js"
+  ],
+  "chromium": "154.0.8037.57",
+  "firstQuality": "0, -2, 0, -2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6",
+  "cancelObservedMilliseconds": 183.72424400877208,
+  "mainThread": {
+    "beats": 41,
+    "maxGapMilliseconds": 135.30000001192093
+  },
+  "scrollRoundTripObservedMs": 920.1998999924399,
+  "appSha256": "c9a39d0cc08ea42d1bdf910d649ca9f24f4f92ba8a46b4cd736d47c7df10ea4d",
+  "workerSha256": "19019a84346a55dbd9446c9e5807f77d78038ea4a4590cd0a2fa70cef85459e7",
+  "pass": true
+}

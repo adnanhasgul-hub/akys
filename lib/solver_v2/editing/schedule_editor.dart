@@ -113,8 +113,11 @@ final class ScheduleEditor {
   final _undo = <_Revision>[], _redo = <_Revision>[];
 
   /// Recheck mutable session authorization; undo must not resurrect expired evidence.
-  EditedSchedule get current =>
-      _current = _evaluate(_current.assignments, _current.locks);
+  /// Without session evidence the problem and evaluated revision are immutable.
+  /// Every mutation/undo already evaluates the new revision before publishing it.
+  EditedSchedule get current => localEvidence == null
+      ? _current
+      : _current = _evaluate(_current.assignments, _current.locks);
   bool get canUndo => _undo.isNotEmpty;
   bool get canRedo => _redo.isNotEmpty;
 

@@ -9,6 +9,7 @@ import 'schedule_page.dart';
 import 'workspace.dart';
 import 'data/draft_repository.dart';
 import 'data/draft_session.dart';
+import 'recovery/store.dart';
 
 class V2App extends StatelessWidget {
   const V2App({super.key, this.workspace, this.repository, this.auth});
@@ -64,7 +65,12 @@ class _AuthorizedWorkspaceState extends State<_AuthorizedWorkspace> {
     ownerId = uid;
     if (status == AuthStatus.authorized && workspace == null) {
       workspace = ScheduleWorkspace();
-      session = DraftSession(workspace!, widget.repository);
+      session = DraftSession(
+        workspace!,
+        widget.repository,
+        owner: uid,
+        recoveryStore: uid == null ? null : createRecoveryStore(),
+      );
     }
     if ([AuthStatus.signedOut, AuthStatus.denied].contains(status)) {
       session?.dispose();

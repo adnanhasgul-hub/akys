@@ -41,6 +41,31 @@ class ScheduleWorkspace extends ChangeNotifier {
     preview ? progress.best!.assignments : editor.current.assignments,
     currentLocks,
   );
+  Problem? _encodedProblem;
+  EditedSchedule? _encodedSchedule;
+  DraftSnapshot? _encodedPreview;
+  Map<String, String>? _encodedNames;
+  String? _encodedDraft;
+
+  /// Progress notifications do not change a draft. Reuse its serialization only
+  /// while immutable problem/editor identities and all mutable names match.
+  /// Saving/restoring still runs the independent validator at the boundary.
+  String get draftPayload {
+    if (_encodedDraft == null ||
+        !identical(_encodedProblem, problem) ||
+        !identical(_encodedSchedule, editor.current) ||
+        !identical(_encodedPreview, loadedPreview) ||
+        !mapEquals(_encodedNames, names)) {
+      final payload = capture().encode();
+      _encodedProblem = problem;
+      _encodedSchedule = editor.current;
+      _encodedPreview = loadedPreview;
+      _encodedNames = Map.of(names);
+      _encodedDraft = payload;
+    }
+    return _encodedDraft!;
+  }
+
   void restore(DraftSnapshot snapshot) {
     if (pending) throw StateError('Önce arama sonucunu kapatın.');
     final replacement = ScheduleEditor(

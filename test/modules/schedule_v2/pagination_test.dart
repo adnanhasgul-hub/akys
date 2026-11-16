@@ -6,6 +6,42 @@ import 'package:akys/modules/schedule_v2/data/draft_repository.dart';
 import 'persistence_test.dart' as fixtures;
 
 void main() {
+  test(
+    'new history pages read immutable metadata, opening reads payload',
+    () async {
+      final db = FakeFirebaseFirestore();
+      final repo = FirestoreDraftRepository(db, fixtures.Authorization());
+      final saved = await repo.save(repo.prepare(fixtures.fixture()));
+      final next = await repo.save(
+        repo.prepare(
+          fixtures.fixture(),
+          id: saved.scheduleId,
+          expectedVersion: 1,
+        ),
+      );
+      final root = db.collection('v2_schedules').doc(saved.scheduleId);
+      final metadata = await root.collection('version_metadata').get();
+      expect(metadata.docs.length, 2);
+      expect(
+        metadata.docs.every((d) => !d.data().containsKey('payload')),
+        true,
+      );
+      final first = await repo.page(scheduleId: saved.scheduleId, pageSize: 1);
+      expect(first.items.single.version, 2);
+      expect(first.cursor!.reference.parent.id, 'version_metadata');
+      final second = await repo.page(
+        scheduleId: saved.scheduleId,
+        after: first.cursor,
+        pageSize: 1,
+      );
+      expect(second.items.single.version, 1);
+      expect(
+        (await repo.open(next.scheduleId)).snapshot.assignments,
+        fixtures.fixture().assignments,
+      );
+    },
+  );
+
   test('125 headers with tied timestamps paginate deterministically without payloads', () async {
     final db = FakeFirebaseFirestore();
     final repo = FirestoreDraftRepository(db, fixtures.Authorization());

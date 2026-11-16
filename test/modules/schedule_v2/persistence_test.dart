@@ -91,6 +91,36 @@ class LostAcknowledgment extends FirestoreDraftRepository {
 }
 
 void main() {
+  test(
+    'dirty cache follows names, assignments, locks, undo and restore',
+    () async {
+      final w = ScheduleWorkspace(initial: fixture().problem)
+        ..restore(fixture());
+      final session = DraftSession(
+        w,
+        FirestoreDraftRepository(FakeFirebaseFirestore(), Authorization()),
+      );
+      await session.save();
+      expect(session.dirty, false);
+      final original = w.draftPayload;
+      expect(identical(w.draftPayload, original), true);
+      w.names['senior-stable'] = 'Changed';
+      expect(session.dirty, true);
+      w.restore(fixture());
+      expect(session.dirty, false);
+      w.edit((e) => e.unlock(0));
+      expect(session.dirty, true);
+      w.edit((e) => e.undo());
+      expect(session.dirty, false);
+      w.edit((e) => e.remove(1));
+      expect(session.dirty, true);
+      w.edit((e) => e.undo());
+      expect(session.dirty, false);
+      session.dispose();
+      w.dispose();
+    },
+  );
+
   test('invalid restored draft preserves assignments and locks as read-only preview', () {
     final original = fixture();
     final bad = DraftSnapshot(

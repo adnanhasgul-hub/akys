@@ -23,8 +23,9 @@ service cloud.firestore {
     match /v2_schedules/{scheduleId} {
       function headPath() { return /databases/$(database)/documents/v2_schedules/$(scheduleId); }
       function validHead(d) {
-        return d.keys().hasOnly(['schema','version','status','year','month','actor','at','operationId','summary','sourceId','sourceVersion','createdBy','createdAt'])
+        return d.keys().hasOnly(['schema','version','status','year','month','actor','at','operationId','summary','sourceId','sourceVersion','createdBy','createdAt','historySchema'])
           && d.keys().hasAll(['schema','version','status','year','month','actor','at','operationId','summary','sourceId','sourceVersion','createdBy','createdAt'])
+          && (!('historySchema' in d) || d.historySchema == 2)
           && d.schema == 1 && d.version is int && d.version > 0
           && d.status in ['draft','archived'] && d.year is int && d.year >= 2000 && d.year <= 2100
           && d.month is int && d.month >= 1 && d.month <= 12
@@ -38,7 +39,9 @@ service cloud.firestore {
       function linked(d) {
         let version = getAfter(/databases/$(database)/documents/v2_schedules/$(scheduleId)/versions/$(string(d.version))).data;
         let event = getAfter(/databases/$(database)/documents/v2_schedules/$(scheduleId)/events/$(d.operationId)).data;
-        return version.diff(d).affectedKeys().hasOnly(['payload'])
+        return (d.get('historySchema', 1) != 2 ||
+            getAfter(/databases/$(database)/documents/v2_schedules/$(scheduleId)/version_metadata/$(string(d.version))).data == d)
+          && version.diff(d).affectedKeys().hasOnly(['payload'])
           && version.keys().size() == d.keys().size() + 1
           && version.payload is string && version.payload.size() <= 650000
           && event.actor == request.auth.uid && event.at == request.time
@@ -50,6 +53,7 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
       allow update: if isAdmin() && resource.data.status == 'draft'
         && validHead(request.resource.data) && linked(request.resource.data)
+        && request.resource.data.get('historySchema', 1) == resource.data.get('historySchema', 1)
         && request.resource.data.version == resource.data.version + 1
         && request.resource.data.year == resource.data.year && request.resource.data.month == resource.data.month
         && request.resource.data.createdBy == resource.data.createdBy && request.resource.data.createdAt == resource.data.createdAt
@@ -65,6 +69,16 @@ service cloud.firestore {
           && request.resource.data.diff(getAfter(headPath()).data).affectedKeys().hasOnly(['payload'])
           && request.resource.data.keys().size() == getAfter(headPath()).data.keys().size()+1
           && request.resource.data.payload is string && request.resource.data.payload.size() <= 650000;
+        allow update, delete: if false;
+      }
+      match /version_metadata/{versionId} {
+        allow read: if isAdmin();
+        allow create: if isAdmin()
+          && versionId == string(request.resource.data.version)
+          && request.resource.data.get('historySchema', 1) == 2
+          && request.resource.data == getAfter(headPath()).data
+          && getAfter(headPath()).data.at == request.time
+          && (!exists(headPath()) || getAfter(headPath()).data.version == get(headPath()).data.version + 1);
         allow update, delete: if false;
       }
       match /events/{eventId} {

@@ -227,6 +227,9 @@ class FirestoreDraftRepository implements DraftRepository {
           : 'revisionCreated';
       final data = <String, dynamic>{
         'schema': 1,
+        // Existing heads remain legacy until an explicit, separately reviewed migration.
+        if (!current.exists || current.data()?['historySchema'] == 2)
+          'historySchema': 2,
         'version': version,
         'status': status,
         'year': snapshot.problem.startDate!.year,
@@ -242,6 +245,9 @@ class FirestoreDraftRepository implements DraftRepository {
         'createdAt': current.data()?['createdAt'] ?? stamp,
       };
       tx.set(ref, data);
+      if (data['historySchema'] == 2) {
+        tx.set(ref.collection('version_metadata').doc('$version'), data);
+      }
       tx.set(ref.collection('versions').doc('$version'), {
         ...data,
         'payload': request.payload,
@@ -254,12 +260,15 @@ class FirestoreDraftRepository implements DraftRepository {
         'operationId': request.operationId,
       });
     });
+    if (await authorization.requireAdmin() != uid) {
+      throw StateError('Oturum değişti.');
+    }
     return open(request.id, version: version);
   }
 
   @override
   Future<DraftRecord> open(String id, {int? version}) async {
-    await authorization.requireAdmin();
+    final uid = await authorization.requireAdmin();
     final ref = root.doc(id);
     final number =
         version ??
@@ -273,6 +282,9 @@ class FirestoreDraftRepository implements DraftRepository {
                 .doc('$number')
                 .get(const GetOptions(source: Source.server)))
             .data();
+    if (await authorization.requireAdmin() != uid) {
+      throw StateError('Oturum değişti.');
+    }
     if (data == null) throw StateError('Sürüm bulunamadı.');
     return record(id, data);
   }
@@ -285,11 +297,23 @@ class FirestoreDraftRepository implements DraftRepository {
   }) async {
     if (pageSize < 1 || pageSize > 50) throw ArgumentError.value(pageSize);
     final uid = await authorization.requireAdmin();
+    // Cursor pins the collection across pages. Legacy histories are explicitly
+    // supported without silently migrating or hiding old versions.
+    final historyCollection = scheduleId == null
+        ? null
+        : after?.reference.parent.id ??
+              ((await root
+                              .doc(scheduleId)
+                              .get(const GetOptions(source: Source.server)))
+                          .data()?['historySchema'] ==
+                      2
+                  ? 'version_metadata'
+                  : 'versions');
     Query<Map<String, dynamic>> query = scheduleId == null
         ? root.orderBy('at', descending: true)
         : root
               .doc(scheduleId)
-              .collection('versions')
+              .collection(historyCollection!)
               .orderBy('version', descending: true);
     query = query.orderBy(FieldPath.documentId, descending: true);
     if (after != null) query = query.startAfterDocument(after);

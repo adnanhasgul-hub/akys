@@ -1,8 +1,9 @@
 """Real Firebase Auth + Firestore emulator + Flutter UI. Never production."""
-import functools,http.server,threading,json,re,os,urllib.request
+import functools,http.server,threading,json,re,os,urllib.request,argparse
 from pathlib import Path
 from playwright.sync_api import sync_playwright,expect
 assert os.environ.get('FIRESTORE_EMULATOR_HOST') in ['127.0.0.1:8080','localhost:8080']
+parser=argparse.ArgumentParser();parser.add_argument('--result',default='tool/solver_v2/results/stage_1_9e_browser.json');args=parser.parse_args()
 results={'checks':[],'errors':[],'externalFirebaseRequests':[]}
 def claim(email, value):
  lookup=urllib.request.Request('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:lookup?key=demo-api-key',data=json.dumps({'email':[email]}).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer owner'})
@@ -50,7 +51,13 @@ with http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(http.serv
    page.get_by_role('tab',name='Çizelge').click()
    button(re.compile('^Kıdemli • REQUIRED')).first.click();page.get_by_text('Ata',exact=True).click();page.get_by_text('Emulator Hekimi',exact=True).click()
    button(re.compile('^Kıdemli • REQUIRED')).first.click();page.get_by_text('Kilitle',exact=True).click()
-   button(re.compile('Kaydedilmemiş değişiklikler')).click();button('Kaydet').click()
+   page.wait_for_timeout(700)
+   page.reload();semantics()
+   button(re.compile('Kaydedilmemiş değişiklikler')).click(timeout=30000)
+   button('Kurtar').click(timeout=15000)
+   expect(button(re.compile('^Kıdemli • REQUIRED.*🔒',re.S)).first).to_be_visible(timeout=20000)
+   results['checks'].append('encrypted unsaved local draft survives reload; same-owner recovery preserves locks')
+   button('Kaydet').click()
    expect(page.get_by_role('group',name=re.compile('^Kaydedildi • v1'))).to_be_visible(timeout=30000)
    results['checks'].append('existing Auth UI admin claim, incomplete draft + doctor + lock saved atomically')
    page.reload();semantics()
@@ -99,6 +106,6 @@ with http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(http.serv
    page.screenshot(path='build/v2-firebase/failure.png')
    raise
   finally:
-   Path('tool/solver_v2/results/stage_1_9d_browser.json').write_text(json.dumps(results,ensure_ascii=False,indent=2)+'\n');browser.close()
+   Path(args.result).write_text(json.dumps(results,ensure_ascii=False,indent=2)+'\n');browser.close()
  server.shutdown()
 print(json.dumps(results,ensure_ascii=False,indent=2))
